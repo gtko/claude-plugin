@@ -24,7 +24,7 @@ Commit et push les changements en cours, lies a l'issue Linear (skill `livraison
 - Grouper les changements par theme si necessaire
 
 ### 2. Gate locale (bloquante)
-Commandes du contrat `.claude/dw.json` (`commands.check`, `commands.build`), sinon celles de la doc du depot. Par defaut, en parallele :
+Commandes de la doc du depot (`CONTRIBUTING.md`, `README.md`, scripts de `package.json`). Par defaut, en parallele :
 - les tests (`npm test`)
 - le lint (`npm run lint`)
 - le build (`npm run build`) s'il existe

@@ -6,7 +6,7 @@ allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(git fetch:*), Bash
 
 # Preparation du merge
 
-Verifie que la PR est prete et la remet a l'humain. **Le merge est un geste humain** (regle Dotworld) : l'agent ne lance pas `gh pr merge`, et le hook process-gate le refuse tant que `processGate.agentMerge` n'est pas `true`. Sur un depot Dotworld a contrat, le seul merge par agent passe par `/dw:ship --auto-merge`, demande explicitement par l'humain, si le contrat l'autorise.
+Verifie que la PR est prete et la remet a l'humain. **Le merge est un geste humain** : l'agent ne lance pas `gh pr merge`, et le hook process-gate le refuse tant que `processGate.agentMerge` n'est pas `true`.
 
 ## Contexte
 
@@ -17,7 +17,7 @@ Verifie que la PR est prete et la remet a l'humain. **Le merge est un geste huma
 ## Workflow
 
 1. **Mesurer l'etat de la PR**
-   - Review independante OK postee apres le dernier commit (`<!-- review-4-axes -->` ou `<!-- review-rapide -->`, ou GREEN `/dw:review`)
+   - Review independante OK postee apres le dernier commit (`<!-- review-4-axes -->` ou `<!-- review-rapide -->`)
    - Commentaires de la PR et de l'issue Linear traites (aucun bloquant sans commit ni reponse)
    - CI : `gh pr checks <pr>` vert, consulte apres le dernier push
    - Branche a jour avec la base (`mergeStateStatus` different de `BEHIND`), sans conflit

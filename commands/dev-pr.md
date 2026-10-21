@@ -12,13 +12,13 @@ Cree une Pull Request GitHub liee a l'issue Linear, puis la fait relire (skill `
 
 - Issue : $ARGUMENTS
 - Branche actuelle : !`git branch --show-current`
-- Commits depuis la base (`git.base` du contrat, sinon `main`) : !`git log refs/remotes/origin/main..HEAD --oneline 2>/dev/null || git log refs/remotes/origin/master..HEAD --oneline 2>/dev/null`
+- Commits depuis la base (base de la doc du depot, sinon `main`) : !`git log refs/remotes/origin/main..HEAD --oneline 2>/dev/null || git log refs/remotes/origin/master..HEAD --oneline 2>/dev/null`
 
 ## Workflow
 
 1. **Verifier les prerequis** (sinon, stop et le dire)
    - Tous les changements sont commites
-   - Gate locale verte, mesuree sur ce head : tests ET lint (et build ou `commands.check` du contrat)
+   - Gate locale verte, mesuree sur ce head : tests ET lint (et build s'il existe)
    - Branche a jour avec la base (`git fetch origin` ; sinon merge de la base, gate, puis reprise)
    - Aucune PR n'existe deja pour cette branche
 

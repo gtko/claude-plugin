@@ -45,7 +45,7 @@ Traite les retours sur la PR **et** sur son issue Linear (skill `livraison`, eta
 
 ## Phase 3 : Gate, review et push
 
-1. Gate locale : tests ET lint (et build ou `commands.check`), verts
+1. Gate locale : tests ET lint (et build s'il existe), verts
 2. Correctif qui touche du fond : nouvelle review par un sous-agent sur les axes concernes, postee en commentaire apres le dernier commit
 3. Branche en retard sur la base : `git fetch origin && git merge refs/remotes/origin/<base> --no-edit`, gate locale
 4. Push

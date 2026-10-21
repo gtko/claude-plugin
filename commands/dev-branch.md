@@ -18,11 +18,10 @@ Cree une branche git liee a une issue Linear (skill `livraison`, etape 3).
 
 Dans cet ordre, la premiere qui existe :
 
-1. `git.branchPattern` du contrat `.claude/dw.json`, lu sur la base distante (jetons `{type}`, `{key}` en minuscules, `{slug}`) ;
-2. la convention de la doc du depot (`CONTRIBUTING.md`, `CLAUDE.md`, `README.md`), par exemple `<ID>-<slug>` ;
-3. le defaut Dotworld : `feature/<cle>-xxxx-<slug>` (ex. `feature/mvp-42-ajout-systeme-auth`).
+1. la convention de la doc du depot (`CONTRIBUTING.md`, `CLAUDE.md`, `README.md`), par exemple `<ID>-<slug>` ;
+2. le defaut : `feature/<cle>-xxxx-<slug>` (ex. `feature/mvp-42-ajout-systeme-auth`).
 
-L'identifiant de l'issue figure toujours dans le nom : Linear lie la branche a l'issue, et le hook process-gate refuse un commit sans lui. Type Conventional (`feat`, `fix`, `refactor`, `chore`, `docs`…) quand le motif a un jeton `{type}`.
+L'identifiant de l'issue figure toujours dans le nom : Linear lie la branche a l'issue, et le hook process-gate refuse un commit sans lui. Prefixe de type (`feat`, `fix`, `refactor`, `chore`, `docs`…) si la convention du depot en prevoit un.
 
 ## Workflow
 
@@ -36,7 +35,7 @@ L'identifiant de l'issue figure toujours dans le nom : Linear lie la branche a l
 
 3. **Creer la branche depuis la base distante fraiche**
    - `git fetch origin --prune`
-   - `git switch -c <nom-branche> refs/remotes/origin/<base>` (base : `git.base` du contrat, sinon `main`)
+   - `git switch -c <nom-branche> refs/remotes/origin/<base>` (base : celle de la doc du depot, sinon `main`)
 
 4. **Mettre a jour Linear**
    - Passer l'issue en `In Progress` (`save_issue`), avant toute modification de code

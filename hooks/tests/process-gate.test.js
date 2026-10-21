@@ -141,8 +141,7 @@ test('git commit sur branche avec clé, sans LINEAR_API_KEY : passe sans appel L
     const d = fakeDeps({ runs: FEATURE, env });
     assert.strictEqual(await decide(shell('git commit -m "x"'), cfgFor(t), d), null);
     assert.strictEqual(d.linearCalls.length, 0);
-    // Toplevel lu pour le contrat .claude/dw.json (absent ici : motif par défaut).
-    assert.deepStrictEqual(d.runCalls.map((c) => c.sig), ['git branch --show-current', 'git rev-parse --show-toplevel']);
+    assert.deepStrictEqual(d.runCalls.map((c) => c.sig), ['git branch --show-current']);
   }
 });
 
@@ -1051,7 +1050,7 @@ test('CLI : entrée invalide -> fail-open', () => {
   }
 });
 
-// --- Merge reserve a l'humain (regle Dotworld) et cle d'issue de toute equipe Linear ---
+// --- Merge reserve a l'humain et cle d'issue de toute equipe Linear ---
 
 test('merge réservé à l\'humain : agentMerge absent ou false (défaut et fichier réel) : refus sans appel à gh', async (t) => {
   const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks-config.json'), 'utf8'));
@@ -1092,18 +1091,6 @@ test('clé d\'issue : un mot-chiffre au milieu d\'un segment n\'est pas une clé
   for (const branch of ['chore/bump-node-20', 'feature/x-utf-8-fix', 'release/v2']) {
     const d = fakeDeps({ runs: ON_BRANCH(branch), env: NO_LINEAR });
     assert.match(await decide(shell('git commit -m x'), { processGate: {} }, d), /refusé/, branch);
-  }
-});
-
-test('contrat .claude/dw.json : seule linear.teamKey compte (feature/utf-8-x refusé, feature/mvp-42-x accepté)', async (t) => {
-  const withContract = (branch) => {
-    const d = fakeDeps({ runs: { ...ON_BRANCH(branch), 'git rev-parse --show-toplevel': { status: 0, stdout: '/work/repo\n' } }, env: NO_LINEAR });
-    d.readFile = (f) => (f === path.join('/work/repo', '.claude', 'dw.json') ? JSON.stringify({ version: 1, linear: { teamKey: 'MVP', teamName: 'X' }, git: { base: 'main' } }) : '');
-    return d;
-  };
-  assert.strictEqual(await decide(shell('git commit -m x'), { processGate: {} }, withContract('feature/mvp-42-export')), null);
-  for (const branch of ['feature/utf-8-fix', 'feature/bench-41-x']) {
-    assert.match(await decide(shell('git commit -m x'), { processGate: {} }, withContract(branch)), /refusé/, branch);
   }
 });
 

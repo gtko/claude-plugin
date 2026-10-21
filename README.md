@@ -82,12 +82,12 @@ flowchart LR
   CI -->|prête| H["In Review<br/>merge par un humain"]
 ```
 
-- Tout changement de code ou de config suit ce process (skill `livraison`, règles Dotworld). Une question, une lecture ou une édition d'une ou deux lignes n'en relève pas.
+- Tout changement de code ou de config suit ce process (skill `livraison`). Une question, une lecture ou une édition d'une ou deux lignes n'en relève pas.
 - L'issue Linear est cherchée avant d'être créée (pas de doublon), passée `In Progress` avant la première édition, et `In Review` quand la PR est prête. Un bug hors périmètre part dans une issue séparée.
 - Après l'ouverture de la PR : CI consultée après chaque push (échec d'infrastructure relancé sans toucher au code), branche à jour avec la base, commentaires de la PR et de l'issue Linear traités (correctif et réponse, ou contestation argumentée d'une suggestion contraire à la spec).
 - La review, faite sur la PR par opus-advisor (sonnet-reviewer en voie rapide) et postée sur la PR, couvre quatre axes : **BUG**, **SECURITY**, **UX/UI** et **PERFORMANCE / COÛT**. Tout changement UI passe d'abord par `/design`.
 - Voie rapide : un petit diff (30 lignes au plus, hors chemins sensibles) peut être relu par `sonnet-reviewer`, avec le marqueur `<!-- review-rapide -->` et une ligne `Tests :`.
-- `process-gate.js` refuse un `git commit` sur `main` ou sur une branche sans identifiant d'issue Linear (`linear.teamKey` du contrat `.claude/dw.json` s'il existe), tout `gh pr merge` lancé par l'agent (un humain merge ; `processGate.agentMerge: true` en surcharge locale pour déléguer, et alors review `<!-- review-4-axes -->` postérieure au dernier commit et checks verts exigés), et tout déploiement hors de `main` à jour.
+- `process-gate.js` refuse un `git commit` sur `main` ou sur une branche sans identifiant d'issue Linear tout `gh pr merge` lancé par l'agent (un humain merge ; `processGate.agentMerge: true` en surcharge locale pour déléguer, et alors review `<!-- review-4-axes -->` postérieure au dernier commit et checks verts exigés), et tout déploiement hors de `main` à jour.
 
 ## Agents
 

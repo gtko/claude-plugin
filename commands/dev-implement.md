@@ -76,7 +76,7 @@ Seuls les agents du graphe sont admis (le hook routing-guard refuse les agents d
 
 **IMPORTANT** : Lance ces agents de validation en parallele :
 
-0. **Gate locale** : tests ET lint (et build ou `commands.check`), verts avant la review.
+0. **Gate locale** : tests ET lint (et build s'il existe), verts avant la review.
 
 1. **Agent `fr-reviewer`** (controle rapide avant la PR, si utile) :
    - Prompt : "Review en francais les fichiers suivants : [liste]. Produis un rapport avec le scoring de confiance."

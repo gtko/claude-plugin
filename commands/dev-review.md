@@ -6,7 +6,7 @@ allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git status:*), Bash(git b
 
 # Review de Pull Request
 
-Review independante de la PR ouverte (skill `livraison`, etape 8) : elle est faite par des **sous-agents du graphe**, jamais par l'agent qui a ecrit le code. Depot Dotworld a contrat avec `gates.prReview` : `/dw:review` en plus, pour la review GitHub `Verdict : GREEN` que la CI attend (son relecteur `dw:fr-reviewer` est remplace par opus-advisor, voir `livraison` etape 8).
+Review independante de la PR ouverte (skill `livraison`, etape 8) : elle est faite par des **sous-agents du graphe**, jamais par l'agent qui a ecrit le code.
 
 ## Contexte
 

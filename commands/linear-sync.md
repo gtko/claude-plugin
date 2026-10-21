@@ -5,9 +5,9 @@ argument-hint: "Description de la fonctionnalite ou de la tache"
 
 # Synchronisation Linear
 
-Tu geres l'issue Linear de la demande (skill `livraison`, etape 2, regles Dotworld de `/dw:ticket`).
+Tu geres l'issue Linear de la demande (skill `livraison`, etape 2).
 
-- **Equipe** : celle du contrat `.claude/dw.json` (`linear.teamName`), sinon celle que nomme la doc du depot ; aucune des deux : demander.
+- **Equipe** : celle que nomme la doc du depot ; sinon, demander.
 - **Outils** : connecteur MCP Linear (`mcp__claude_ai_Linear__*`, ou `mcp__<uuid>__*` charge par `ToolSearch` dans Claude Desktop) : `list_issues`, `get_issue`, `list_comments`, `save_issue`, `save_comment`, `list_projects`. La CLI `linear` seulement si aucun connecteur n'est disponible.
 - Titres, descriptions et commentaires en **francais**.
 
@@ -34,7 +34,7 @@ Demande utilisateur : $ARGUMENTS
    - `## A faire` : actions convenues
    - `## Criteres d'acceptation` **en checklist** `- [ ] ...`, testables, derives de la demande, jamais inventes ; non deductibles : les demander
    - `## Hors perimetre` si quelque chose est exclu
-3. Champs : priorite seulement si la demande en fixe une ; label seulement parmi `linear.labels` du contrat, sans contrat aucun, **jamais de label cree** ; projet seulement s'il est nomme (demande ou `linear.projectAliases`)
+3. Champs : priorite seulement si la demande en fixe une ; label seulement parmi ceux qui existent dans l'equipe, **jamais de label cree** ; projet seulement s'il est nomme (demande ou doc du depot)
 4. Creer l'issue (`save_issue`) sans redemander quand la demande est claire ; afficher l'identifiant cree (ex. MVP-42)
 
 ## Phase 3 : Planification et decoupe

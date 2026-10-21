@@ -1,7 +1,7 @@
 // PreToolUse (matcher Bash|PowerShell) : garde-fou du process de livraison (ODY-128).
 // Refuse git commit / gh pr create / gh pr merge / deploiement qui sortent du process :
 // branche sans cle d'issue (ou main/master), issue Linear inexistante, PR sans cle d'issue,
-// merge par l'agent sans processGate.agentMerge (merge reserve a l'humain, regle Dotworld),
+// merge par l'agent sans processGate.agentMerge (merge reserve a l'humain),
 // review 4 axes absente ou perimee (ou review rapide, voie rapide ODY-130 : petit diff hors chemins sensibles),
 // checks en echec, deploiement hors main a jour.
 // Ne reagit qu'aux commandes concernees : le reste passe sans aucun appel externe.
@@ -37,11 +37,10 @@ const DRIVE_RE = /^[A-Za-z]:[\\/]/;
 
 const PG_DEFAULTS = {
   enabled: true,
-  // Identifiant d'issue Linear de n'importe quelle equipe (cle de 1 a 10 caracteres, comme linear.teamKey du contrat dw).
-  // Cle au debut du nom de branche ou d'un de ses segments (BENCH-41-x, feature/mvp-42-x) ; avec un contrat
-  // .claude/dw.json, seule sa linear.teamKey compte (voir repoKeyPattern).
+  // Identifiant d'issue Linear (cle d'equipe de 1 a 10 caracteres) au debut du nom de branche ou d'un de ses segments
+  // (BENCH-41-x, feature/mvp-42-x).
   issueKeyPattern: '(?<=^|/)[a-z][a-z0-9]{0,9}-\\d+(?=[-_/.]|$)',
-  // Merge par l'agent : refuse par defaut, un humain merge (regle Dotworld).
+  // Merge par l'agent : refuse par defaut, un humain merge.
   agentMerge: false,
   deployPatterns: ['wrangler deploy\\b', 'deploy:worker\\b'],
   linearCacheTtlMinutes: 60,
@@ -127,17 +126,6 @@ function citesKey(text, key) {
   return new RegExp('(?<![a-z0-9])' + k + '(?!\\d)', 'i').test(String(text));
 }
 
-// Motif de branche tire du contrat Dotworld du depot (.claude/dw.json, linear.teamKey) ; null sans contrat lisible.
-function repoKeyPattern(c) {
-  const top = sh(c, 'git', ['rev-parse', '--show-toplevel'], c.cwd);
-  if (top.status !== 0) return null;
-  const dw = parseJson(c.deps.readFile(path.join(String(top.stdout).trim(), '.claude', 'dw.json')));
-  const key = dw && dw.linear && dw.linear.teamKey;
-  if (typeof key !== 'string' || !/^[A-Z][A-Z0-9]{0,9}$/.test(key)) return null;
-  return '(?<=^|/)' + key.toLowerCase() + '-\\d+(?=[-_/.]|$)';
-}
-
-const keyPatternOf = (c) => repoKeyPattern(c) || c.pg.issueKeyPattern;
 
 // Valeurs capturees : position trouvee sur le texte masque, texte lu sur le brut (meme longueur).
 function rawValues(raw, masked, re) {
@@ -334,7 +322,7 @@ async function linearQuery(apiKey, query, timeoutMs = LINEAR_TIMEOUT_MS) {
 }
 
 function defaultDeps() {
-  return { env: process.env, now: () => Date.now(), run: runCommand, linear: linearQuery, readFile: readText };
+  return { env: process.env, now: () => Date.now(), run: runCommand, linear: linearQuery };
 }
 
 // Temps restant de l'echeance globale ; leve si elle est depassee (decide passe alors en fail-open).
@@ -418,7 +406,7 @@ async function issueMissing(key, c) {
 const branchRefusal = (branch, action) =>
   `${action} refusé sur « ${branch || '(détachée)'} » : reprends ou crée l'issue Linear, puis une branche qui porte son identifiant (convention du dépôt, sinon feature/<clé>-xxxx-…) ; main et master interdites.`;
 const missingIssue = (key) => `l'issue ${key} n'existe pas dans Linear : crée-la ou corrige la clé avant de continuer.`;
-const MERGE_HUMAN = 'merge réservé à l\'humain (règle Dotworld) : déclare la PR prête (issue In Review, commentaire Linear) et laisse un humain merger. Merge par l\'agent seulement si l\'humain l\'a demandé explicitement et que processGate.agentMerge vaut true dans la configuration des hooks.';
+const MERGE_HUMAN = 'merge réservé à l\'humain : déclare la PR prête (issue In Review, commentaire Linear) et laisse un humain merger. Merge par l\'agent seulement si l\'humain l\'a demandé explicitement et que processGate.agentMerge vaut true dans la configuration des hooks.';
 const REVIEW_MISSING = `review manquante ou périmée : poste la review 4 axes après le dernier commit (marqueur ${REVIEW_MARKER}, sections BUG, SECURITY, UX/UI, PERFORMANCE, Verdict : OK).`;
 const REVIEW_MISSING_FAST = `${REVIEW_MISSING} Un petit diff hors chemins sensibles peut passer avec une review rapide (marqueur ${FAST_MARKER}, ligne « Tests : ... », Verdict : OK).`;
 
@@ -610,7 +598,7 @@ async function checkCommit(c) {
   const branch = currentBranch(c, c.cwd);
   if (branch === null) return null;
   if (BASE_BRANCHES.includes(branch)) return branchRefusal(branch, 'commit');
-  const key = branchKey(branch, keyPatternOf(c));
+  const key = branchKey(branch, c.pg.issueKeyPattern);
   if (!key) return branchRefusal(branch, 'commit');
   return (await issueMissing(key, c)) ? missingIssue(key) : null;
 }
@@ -619,7 +607,7 @@ async function checkPrCreate(c) {
   const branch = currentBranch(c, c.cwd);
   if (branch === null) return null;
   if (BASE_BRANCHES.includes(branch)) return branchRefusal(branch, 'gh pr create');
-  const key = branchKey(branch, keyPatternOf(c));
+  const key = branchKey(branch, c.pg.issueKeyPattern);
   if (!key) return branchRefusal(branch, 'gh pr create');
   const tail = tailOf(c);
   const texts = rawValues(tail.raw, tail.masked, PR_TEXT_FLAG_RE);
