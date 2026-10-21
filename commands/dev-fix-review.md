@@ -1,94 +1,18 @@
 ---
-description: "Traiter les retours de review : repondre en FR, resoudre les commentaires, corriger le code"
+description: "Traiter les retours d'une PR et de son issue Linear : corriger les bloquants, contester ce qui contredit la spec, repondre, puis CI"
 argument-hint: "Numero de PR (optionnel, utilise la PR de la branche courante)"
-allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git push:*), Bash(git diff:*), Bash(gh pr view:*), Bash(gh api:*), Bash(gh pr comment:*)
+allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git push:*), Bash(git diff:*), Bash(git fetch:*), Bash(git merge:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh run view:*), Bash(gh run rerun:*), Bash(gh api:*), Bash(gh pr comment:*)
 ---
 
-# Traitement des retours de review
+# Traitement des retours
 
-Traite les commentaires de review sur la PR : repond en francais, corrige le code, resout les discussions.
+PR : $ARGUMENTS — skill `livraison`, etapes 9 et 10. Reponses en francais.
 
-## Contexte
-
-- Argument : $ARGUMENTS
-- Branche actuelle : !`git branch --show-current`
-- PR en cours : !`gh pr view --json number,title,url 2>/dev/null || echo "Pas de PR trouvee"`
-
-## Phase 1 : Lecture des commentaires
-
-**Actions :**
-1. Recuperer tous les commentaires de review :
-   - `gh api repos/{owner}/{repo}/pulls/{pr_number}/comments`
-   - `gh api repos/{owner}/{repo}/pulls/{pr_number}/reviews`
-2. Categoriser les commentaires :
-   - **Corrections demandees** : changements de code requis
-   - **Questions** : demandes de clarification
-   - **Suggestions** : ameliorations optionnelles
-   - **Approuves** : commentaires positifs
-3. Presenter un resume a l'utilisateur
-
-## Phase 2 : Traitement des commentaires
-
-Pour chaque commentaire necessitant une action :
-
-### Corrections de code
-1. Lire le fichier concerne
-2. Comprendre la demande
-3. Appliquer la correction
-4. Repondre au commentaire en francais :
-   - "Corrige : [explication de ce qui a ete fait]"
-   - Ou "Non corrige : [justification technique]" si la correction n'est pas pertinente
-
-### Questions
-1. Formuler une reponse claire en francais
-2. Poster la reponse via `gh api`
-
-### Suggestions
-1. Evaluer la pertinence
-2. Si appliquee : "Bonne idee, c'est applique !"
-3. Si refusee : "Merci pour la suggestion. Je ne l'applique pas car [raison]"
-
-## Phase 3 : Commit des corrections
-
-**Actions :**
-1. Stage les fichiers modifies
-2. Commit avec message :
-   ```
-   fix(review): corrections suite a la review PR #XX
-
-   - Correction 1
-   - Correction 2
-
-   Ref: MVP-XX
-   Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
-   ```
-3. Push sur la branche
-
-## Phase 4 : Resolution des discussions
-
-**Actions :**
-1. Pour chaque commentaire traite, marquer la discussion comme resolue si possible
-2. Poster un commentaire general sur la PR :
-   ```
-   Corrections appliquees suite a la review :
-   - [x] Commentaire 1 : corrige
-   - [x] Commentaire 2 : corrige
-   - [x] Question 3 : repondu
-   - [ ] Suggestion 4 : non appliquee (justification)
-
-   Pret pour une nouvelle review !
-   ```
-
-## Phase 5 : Verification
-
-**Actions :**
-1. Lancer une review rapide des corrections appliquees
-2. S'assurer qu'aucune regression n'a ete introduite
-3. Informer l'utilisateur : "Toutes les corrections sont appliquees et pushees. Pret pour re-review."
-
-## Notes
-
-- Toutes les reponses aux commentaires sont en **francais**
-- Etre respectueux et constructif dans les reponses
-- Si un commentaire est ambigu, demander clarification a l'utilisateur
-- Ne jamais ignorer un commentaire sans l'expliquer
+1. Lire : `gh pr view <pr> --comments`, `gh api repos/{owner}/{repo}/pulls/{pr}/comments` et `.../reviews`, puis l'issue Linear (`get_issue` + `list_comments`) : le besoin a pu changer.
+2. Par retour :
+   - bloquant ou besoin modifie : commit de correction (avec un test qui echouerait sans lui) **et** reponse sur la PR citant le commit ;
+   - suggestion contraire a la spec, a un ADR ou aux criteres : ne pas l'appliquer, repondre avec la justification et la reference ;
+   - question ou suggestion optionnelle : repondre ; aucun retour sans reponse.
+3. Gate locale, re-review si le correctif touche du fond, base en retard : `git merge refs/remotes/origin/<base> --no-edit`, push.
+4. `gh pr checks <pr> --watch` : echec d'infra → `gh run rerun <id> --failed` sans toucher au code ; echec reel → corriger et reprendre en 3.
+5. Recap sur la PR (retour → commit ou raison), relire PR et issue une derniere fois. Plus rien d'ouvert et CI verte : commentaire Linear « PR prete, en attente de merge », issue `In Review` si besoin. Jamais de merge.

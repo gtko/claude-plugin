@@ -63,7 +63,7 @@ Le plugin branche quatre événements sur `hooks/dispatch.js` (`hooks/hooks.json
 | `PreCompact` | `hooks/pre-compact.js` | Écrit ou rafraîchit la passation avant un compactage | `HANDOFF=off` |
 | `PreToolUse` (`Agent`) | `hooks/routing-guard.js` | Refuse les sous-agents hors graphe : agent générique, modèle Opus hérité, ou prompt sans `ESCALADE:`, `DIRECT:`, `OPUS:` ou `LEAD:` là où il est exigé | aucun |
 | `PreToolUse` (`Bash`, `PowerShell`) | `hooks/heavy-gate.js` | Limite les suites lourdes lancées en parallèle (4 suites, 40 processus node) | `HEAVY_GATE=off` (env ou commande) |
-| `PreToolUse` (`Bash`, `PowerShell`) | `hooks/process-gate.js` | Refuse commit, PR, merge ou déploiement hors process (clé `ody-N`, review 4 axes, checks) | `PROCESS_GATE=off` |
+| `PreToolUse` (`Bash`, `PowerShell`) | `hooks/process-gate.js` | Refuse commit ou PR hors process (identifiant d'issue Linear dans la branche et la PR), tout merge par l'agent, `gh pr merge` ou `gh api …/merge` (merge humain, `processGate.agentMerge`), et un déploiement hors de `main` à jour | `PROCESS_GATE=off` |
 | `PreToolUse` (tous les outils) | `hooks/tool-guard.js` | Budget d'appels par agent, anti-boucle, lectures trop larges, commandes destructrices refusées | `TOOL_GUARD=off` (tout) ; `DENY_LIST=off` (commandes destructrices seulement) |
 
 Les interrupteurs sont des variables d'environnement à la valeur `off`, par exemple `$env:PROCESS_GATE = 'off'` en PowerShell.
@@ -72,18 +72,22 @@ Les interrupteurs sont des variables d'environnement à la valeur `off`, par exe
 
 ```mermaid
 flowchart LR
-  L["Issue Linear<br/>clé ody-N"] --> W["Worktree<br/>branche feature/ody-N-sujet"]
-  W --> C["Commits locaux<br/>pas de push"]
-  C --> R{"Review locale<br/>opus-advisor, 4 axes"}
+  L["Issue Linear<br/>reprise ou créée, critères en checklist<br/>In Progress"] --> W["Branche liée à l'issue<br/>convention du dépôt"]
+  W --> C["Commits locaux<br/>tests et lint verts"]
+  C --> P["Push et PR<br/>Fixes ID, plan de test"]
+  P --> R{"Review sur la PR<br/>opus-advisor, 4 axes"}
   R -->|À CORRIGER| C
-  R -->|OK| P["Push et PR<br/>commentaire de review"]
-  P --> M["Merge dans main<br/>puis déploiement"]
+  R -->|OK| CI{"CI après chaque push<br/>retours PR et Linear"}
+  CI -->|correctif| C
+  CI -->|prête| H["In Review<br/>merge par un humain"]
 ```
 
-- Tout changement de code ou de config suit ce process. Une question, une lecture ou une édition d'une ou deux lignes n'en relève pas.
-- La review locale couvre quatre axes : **BUG**, **SECURITY**, **UX/UI** et **PERFORMANCE / COÛT**. Tout changement UI passe d'abord par `/design`.
+- Tout changement de code ou de config suit ce process (skill `livraison`). Une question, une lecture ou une édition d'une ou deux lignes n'en relève pas.
+- L'issue Linear est cherchée avant d'être créée (pas de doublon), passée `In Progress` avant la première édition, et `In Review` quand la PR est prête. Un bug hors périmètre part dans une issue séparée.
+- Après l'ouverture de la PR : CI consultée après chaque push (échec d'infrastructure relancé sans toucher au code), branche à jour avec la base, commentaires de la PR et de l'issue Linear traités (correctif et réponse, ou contestation argumentée d'une suggestion contraire à la spec).
+- La review, faite sur la PR par opus-advisor (sonnet-reviewer en voie rapide) et postée sur la PR, couvre quatre axes : **BUG**, **SECURITY**, **UX/UI** et **PERFORMANCE / COÛT**. Tout changement UI passe d'abord par `/design`.
 - Voie rapide : un petit diff (30 lignes au plus, hors chemins sensibles) peut être relu par `sonnet-reviewer`, avec le marqueur `<!-- review-rapide -->` et une ligne `Tests :`.
-- `process-gate.js` refuse un `git commit` sur `main` ou sur une branche sans clé `ody-N`, un `gh pr merge` sans commentaire `<!-- review-4-axes -->` postérieur au dernier commit, et tout déploiement hors de `main` à jour.
+- `process-gate.js` refuse un `git commit` sur `main` ou sur une branche sans identifiant d'issue Linear tout `gh pr merge` lancé par l'agent (un humain merge ; `processGate.agentMerge: true` en surcharge locale pour déléguer, et alors review `<!-- review-4-axes -->` postérieure au dernier commit et checks verts exigés), et tout déploiement hors de `main` à jour.
 
 ## Agents
 
@@ -98,7 +102,6 @@ flowchart LR
 | `sonnet-builder` | Sonnet | medium | Escalade (`ESCALADE:`) ou usage direct justifié (`DIRECT:`) | oui |
 | `sonnet-lead` | Sonnet | medium | Second orchestrateur des gros chantiers (`LEAD:`) | oui |
 | `fr-reviewer` | Sonnet | medium | Review de code, rapports en français | non |
-| `implementer` | Sonnet | medium | Implémentation d'un plan existant | non |
 | `linear-planner` | Sonnet | medium | Découpage d'une demande en sous-tâches Linear | non |
 
 ## Config complète : dépôt gtko/config

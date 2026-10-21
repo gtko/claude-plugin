@@ -34,10 +34,12 @@ const NO_LINEAR = {};
 
 const shell = (command, tool_name = 'Bash') => ({ tool_name, tool_input: { command }, cwd: CWD });
 
+// agentMerge: true par defaut ici : les tests de merge ci-dessous portent sur le controle de review et de checks ;
+// le refus par defaut (merge reserve a l'humain) a ses propres tests (« merge reserve a l'humain »).
 function cfgFor(t, processGate = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'process-gate-test-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  return { stateDir: dir, processGate };
+  return { stateDir: dir, processGate: { agentMerge: true, ...processGate } };
 }
 
 // Faux git/gh/Linear. runs : prefixe de commande -> reponse (objet ou fonction(args, cwd)).
@@ -119,7 +121,7 @@ test('git commit sur main ou master : refus (Bash et PowerShell)', async (t) => 
     for (const tool of ['Bash', 'PowerShell']) {
       const d = fakeDeps({ runs: ON_BRANCH(branch) });
       const r = await decide(shell('git commit -m "ody-128 x"', tool), cfgFor(t), d);
-      assert.match(r, /feature\/ody-XXX/, branch + ' ' + tool);
+      assert.match(r, /branche qui porte son identifiant/, branch + ' ' + tool);
       assert.match(r, /crée l'issue Linear/);
       assert.strictEqual(d.linearCalls.length, 0);
     }
@@ -240,7 +242,7 @@ test('gh pr create : clé d\'une autre issue (ODY-1280 pour ody-128) : refus', a
 
 test('gh pr create depuis main : refus', async (t) => {
   const d = fakeDeps({ runs: ON_BRANCH('main'), env: NO_LINEAR });
-  assert.match(await decide(shell('gh pr create --title "ODY-128 x"'), cfgFor(t), d), /feature\/ody-XXX/);
+  assert.match(await decide(shell('gh pr create --title "ODY-128 x"'), cfgFor(t), d), /branche qui porte son identifiant/);
 });
 
 test('gh pr create : issue absente de Linear : refus', async (t) => {
@@ -500,6 +502,7 @@ test('voie rapide : package.json et .npmrc sont sensibles (une seule ligne suffi
 
 test('hooks-config.json (fichier réel) : package.json et .npmrc figurent dans fastLane.sensitivePaths', async (t) => {
   const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks-config.json'), 'utf8'));
+  real.processGate = { ...real.processGate, agentMerge: true };
   for (const file of ['package.json', '.npmrc']) {
     const view = prFull([{ body: FAST_OK, createdAt: REVIEW_AT }], { additions: 1, deletions: 0, files: [{ path: file }] });
     const d = fakeDeps({ runs: fastRun(view), env: NO_LINEAR });
@@ -580,7 +583,7 @@ test('dossier effectif : cd, Set-Location, Push-Location et chemin Git Bash /c/.
   ];
   for (const [cmd, tool] of cases) {
     const d = fakeDeps({ runs: ON_BRANCH('main') });
-    assert.match(await decide(shell(cmd, tool), cfgFor(t), d), /feature\/ody-XXX/, cmd);
+    assert.match(await decide(shell(cmd, tool), cfgFor(t), d), /branche qui porte son identifiant/, cmd);
     assert.strictEqual(d.runCalls[0].cwd, path.win32.normalize(REPO_WIN), cmd);
   }
 });
@@ -612,7 +615,7 @@ const inRepo = (command) => ({ tool_name: 'Bash', tool_input: { command }, cwd: 
 test('sous-shell : (cd ../autre && git commit -m m) && gh pr create contrôle la PR dans le dossier de départ', async (t) => {
   const d = fakeDeps({ runs: branchBy({ [REPO_N]: 'main' }) });
   assert.match(await decide(inRepo('(cd ../autre && git commit -m m) && gh pr create'), cfgFor(t), d), /gh pr create refusé sur « main »/);
-  assert.deepStrictEqual(d.runCalls.map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN, REPO_N]);
+  assert.deepStrictEqual(d.runCalls.filter((c) => c.sig === 'git branch --show-current').map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN, REPO_N]);
 });
 
 test('sous-shell : (cd ../autre && git commit -m m) contrôle le commit dans ../autre', async (t) => {
@@ -715,14 +718,14 @@ test('pushd ../autre && git commit -m m && popd && git commit -m n : popd revien
   const d = fakeDeps({ runs: branchBy({ [REPO_N]: 'main' }) });
   const input = { tool_name: 'Bash', tool_input: { command: 'pushd ../autre && git commit -m m && popd && git commit -m n' }, cwd: REPO_WIN };
   assert.match(await decide(input, cfgFor(t), d), /commit refusé sur « main »/);
-  assert.deepStrictEqual(d.runCalls.map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN, REPO_N]);
+  assert.deepStrictEqual(d.runCalls.filter((c) => c.sig === 'git branch --show-current').map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN, REPO_N]);
 });
 
 test('Push-Location ../autre; git commit -m m; Pop-Location; git commit -m n (PowerShell) : Pop-Location revient au dossier de départ', async (t) => {
   const d = fakeDeps({ runs: branchBy({ [REPO_N]: 'main' }) });
   const input = { tool_name: 'PowerShell', tool_input: { command: 'Push-Location ../autre; git commit -m m; Pop-Location; git commit -m n' }, cwd: REPO_WIN };
   assert.match(await decide(input, cfgFor(t), d), /commit refusé sur « main »/);
-  assert.deepStrictEqual(d.runCalls.map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN, REPO_N]);
+  assert.deepStrictEqual(d.runCalls.filter((c) => c.sig === 'git branch --show-current').map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN, REPO_N]);
 });
 
 test('pushd dans un sous-shell : (pushd ../autre); git commit -m m reste dans le dossier de départ', async (t) => {
@@ -760,7 +763,7 @@ test('ODY-161 : groupe { … } après && ou || : le cd qu\'il contient est condi
 test('ODY-161 : cd ../autre && { git commit -m m; } contrôle le commit dans ../autre', async (t) => {
   const d = fakeDeps({ runs: branchBy({ [REPO_N]: 'main' }) });
   await decide(inRepo('cd ../autre && { git commit -m m; }'), cfgFor(t), d);
-  assert.deepStrictEqual(d.runCalls.map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN]);
+  assert.deepStrictEqual(d.runCalls.filter((c) => c.sig === 'git branch --show-current').map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN]);
 });
 
 test('ODY-161 : false && cd ../x; git commit -m m → dossier inconnu', async (t) => {
@@ -835,13 +838,13 @@ test('processGate.excludeRepos : casse et séparateurs ignorés', async (t) => {
 test('processGate.excludeRepos : sous-dépôt situé dans un dossier exclu reste contrôlé', async (t) => {
   const d = fakeDeps({ runs: { ...ON_BRANCH('main'), 'git rev-parse --show-toplevel': toplevel } });
   const input = { tool_name: 'Bash', tool_input: { command: 'cd sub-repo && git commit -m x' }, cwd: LAUNCH };
-  assert.match(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), /feature\/ody-XXX/);
+  assert.match(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), /branche qui porte son identifiant/);
 });
 
 test('processGate.excludeRepos : session dans laststream, git -C vers un dépôt contrôlé sur main : refus', async (t) => {
   const d = fakeDeps({ runs: { ...ON_BRANCH('main'), 'git rev-parse --show-toplevel': toplevel } });
   const input = { tool_name: 'Bash', tool_input: { command: `git -C ${CONTROLLED} commit -m x` }, cwd: LAUNCH };
-  assert.match(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), /feature\/ody-XXX/);
+  assert.match(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), /branche qui porte son identifiant/);
   assert.strictEqual(d.runCalls[0].cwd, path.win32.normalize(CONTROLLED));
 });
 
@@ -918,7 +921,7 @@ test('gh pr create : --body-file lu, -F - non inspecté, --fill vérifié sur le
 test('git commit : options globales (-c, --no-pager, --git-dir=) reconnues ; git log ignoré', async (t) => {
   for (const cmd of ['git -c user.name=x commit -m y', 'git --no-pager commit -m y', 'git --git-dir=.git -c a=b commit -m y']) {
     const d = fakeDeps({ runs: ON_BRANCH('main') });
-    assert.match(await decide(shell(cmd), cfgFor(t), d), /feature\/ody-XXX/, cmd);
+    assert.match(await decide(shell(cmd), cfgFor(t), d), /branche qui porte son identifiant/, cmd);
   }
   const d = fakeDeps({ runs: ON_BRANCH('main') });
   assert.strictEqual(await decide(shell('git --no-pager log'), cfgFor(t), d), null);
@@ -978,7 +981,7 @@ test('échéance : un refus déjà calculé est conservé, le contrôle suivant 
     'git branch --show-current': () => { d.clock.t += 16000; return { status: 0, stdout: 'main\n' }; },
     'gh pr view': prView([{ body: REVIEW_OK, createdAt: REVIEW_AT }]),
   } });
-  assert.match(await decide(shell('git commit -m x && gh pr merge 42'), cfgFor(t), d), /feature\/ody-XXX/);
+  assert.match(await decide(shell('git commit -m x && gh pr merge 42'), cfgFor(t), d), /branche qui porte son identifiant/);
   assert.ok(!d.runCalls.some((c) => c.sig.startsWith('gh pr view')));
 });
 
@@ -1045,4 +1048,56 @@ test('CLI : entrée invalide -> fail-open', () => {
     assert.strictEqual(r.status, 0, bad);
     assert.strictEqual(r.stdout, '', bad);
   }
+});
+
+// --- Merge reserve a l'humain et cle d'issue de toute equipe Linear ---
+
+test('merge réservé à l\'humain : agentMerge absent ou false (défaut et fichier réel) : refus sans appel à gh', async (t) => {
+  const real = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'hooks-config.json'), 'utf8'));
+  assert.strictEqual(real.processGate.agentMerge, false);
+  const reviewed = prView([{ body: REVIEW_OK, createdAt: REVIEW_AT }]);
+  for (const cfg of [{ processGate: {} }, { processGate: { agentMerge: false } }, real]) {
+    const d = fakeDeps({ runs: { 'gh pr view': reviewed }, env: NO_LINEAR });
+    const r = await decide(shell('gh pr merge 42 --squash'), cfg, d);
+    assert.match(r, /merge réservé à l'humain/);
+    // Ni gh pr view ni gh pr checks (le fichier réel peut lire le toplevel git pour excludeRepos).
+    assert.deepStrictEqual(d.runCalls.filter((c) => c.sig.startsWith('gh ')), []);
+  }
+});
+
+test('merge réservé à l\'humain : agentMerge « true » en texte ne vaut pas autorisation', async (t) => {
+  const d = fakeDeps({ env: NO_LINEAR });
+  assert.match(await decide(shell('gh pr merge 42'), { processGate: { agentMerge: 'true' } }, d), /merge réservé à l'humain/);
+});
+
+test('clé d\'issue par défaut : toute équipe Linear (BENCH-41, LOVER-7, A-1), convention <ID>-slug ou feature/<clé>-…', async (t) => {
+  for (const branch of ['BENCH-41-webhooks-doublons', 'feature/lover-7-export', 'fix/A-1-x', 'feature/ody-128-process-gate']) {
+    const d = fakeDeps({ runs: ON_BRANCH(branch), env: NO_LINEAR });
+    assert.strictEqual(await decide(shell('git commit -m x'), { processGate: {} }, d), null, branch);
+  }
+  for (const branch of ['feature/export-csv', 'main', 'bench41-x']) {
+    const d = fakeDeps({ runs: ON_BRANCH(branch), env: NO_LINEAR });
+    assert.match(await decide(shell('git commit -m x'), { processGate: {} }, d), /refusé/, branch);
+  }
+});
+
+test('gh pr create : la clé de la branche (BENCH-41) doit figurer dans le titre ou le corps', async (t) => {
+  const d = fakeDeps({ runs: ON_BRANCH('BENCH-41-webhooks'), env: NO_LINEAR });
+  assert.strictEqual(await decide(shell('gh pr create --title "fix(payments): doublons (BENCH-41)" --body "x"'), { processGate: {} }, d), null);
+  assert.match(await decide(shell('gh pr create --title "fix" --body "BENCH-410"'), { processGate: {} }, d), /citer BENCH-41/);
+});
+
+test('clé d\'issue : un mot-chiffre au milieu d\'un segment n\'est pas une clé (bump-node-20, release/v2, x-utf-8)', async (t) => {
+  for (const branch of ['chore/bump-node-20', 'feature/x-utf-8-fix', 'release/v2']) {
+    const d = fakeDeps({ runs: ON_BRANCH(branch), env: NO_LINEAR });
+    assert.match(await decide(shell('git commit -m x'), { processGate: {} }, d), /refusé/, branch);
+  }
+});
+
+test('merge par gh api (pulls/<n>/merge) : toujours refusé, guillemets compris', async (t) => {
+  for (const cmd of ['gh api -X PUT repos/o/r/pulls/42/merge', 'gh api --method PUT "repos/o/r/pulls/42/merge" -f merge_method=squash']) {
+    assert.match(await decide(shell(cmd), { processGate: {} }, fakeDeps({ env: NO_LINEAR })), /merge réservé à l'humain/, cmd);
+    assert.match(await decide(shell(cmd), { processGate: { agentMerge: true } }, fakeDeps({ env: NO_LINEAR })), /utilise gh pr merge/, cmd);
+  }
+  assert.strictEqual(await decide(shell('gh api repos/o/r/pulls/42/comments'), { processGate: {} }, fakeDeps({ env: NO_LINEAR })), null);
 });

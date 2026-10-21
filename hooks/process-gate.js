@@ -1,6 +1,7 @@
 // PreToolUse (matcher Bash|PowerShell) : garde-fou du process de livraison (ODY-128).
 // Refuse git commit / gh pr create / gh pr merge / deploiement qui sortent du process :
 // branche sans cle d'issue (ou main/master), issue Linear inexistante, PR sans cle d'issue,
+// merge par l'agent sans processGate.agentMerge (merge reserve a l'humain),
 // review 4 axes absente ou perimee (ou review rapide, voie rapide ODY-130 : petit diff hors chemins sensibles),
 // checks en echec, deploiement hors main a jour.
 // Ne reagit qu'aux commandes concernees : le reste passe sans aucun appel externe.
@@ -36,7 +37,11 @@ const DRIVE_RE = /^[A-Za-z]:[\\/]/;
 
 const PG_DEFAULTS = {
   enabled: true,
-  issueKeyPattern: 'ody-\\d+',
+  // Identifiant d'issue Linear (cle d'equipe de 1 a 10 caracteres) au debut du nom de branche ou d'un de ses segments
+  // (BENCH-41-x, feature/mvp-42-x).
+  issueKeyPattern: '(?<=^|/)[a-z][a-z0-9]{0,9}-\\d+(?=[-_/.]|$)',
+  // Merge par l'agent : refuse par defaut, un humain merge.
+  agentMerge: false,
   deployPatterns: ['wrangler deploy\\b', 'deploy:worker\\b'],
   linearCacheTtlMinutes: 60,
   excludeRepos: [],
@@ -53,6 +58,8 @@ const PG_DEFAULTS = {
 const GIT_COMMIT_RE = /\bgit(?:\s+-(?:-[\w-]+|[A-Za-z])(?:=[^\s;&|]+|\s+(?:"[^"]*"|'[^']*'|[^\s"'\-;&|][^\s;&|]*))?)*\s+commit(?![\w-])/g;
 const PR_CREATE_RE = /\bgh\s+pr\s+create(?![\w-])/g;
 const PR_MERGE_RE = /\bgh\s+pr\s+merge(?![\w-])/g;
+// Merge par l'API (gh api ... pulls/<n>/merge), lu sur le texte brut (le chemin est souvent entre guillemets).
+const API_MERGE_RE = /\bgh\s+api\b[^;&|\r\n]*?pulls\/[^\s/"']+\/merge(?![\w-])/g;
 // Valeurs lues sur le texte non masque (la valeur capturee est toujours en fin de motif).
 const GIT_C_OPT_RE = /(?:^|\s)-C(?:=|\s+)("(?:[^"\\]|\\.)*"|'[^']*'|[^\s"'][^\s;&|]*)/g;
 const PR_TEXT_FLAG_RE = /(?:^|\s)(?:--title|-t|--body|-b)(?:=|\s+)("(?:[^"\\]|\\.)*"|'[^']*'|\S+)/g;
@@ -112,6 +119,13 @@ function parseJson(s) {
 function keysIn(text, pattern) {
   return (String(text).match(new RegExp(pattern, 'gi')) || []).filter(Boolean).map((k) => k.toUpperCase());
 }
+
+// La cle exacte `key` citee dans un texte (ODY-1280 ne cite pas ODY-128).
+function citesKey(text, key) {
+  const k = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp('(?<![a-z0-9])' + k + '(?!\\d)', 'i').test(String(text));
+}
+
 
 // Valeurs capturees : position trouvee sur le texte masque, texte lu sur le brut (meme longueur).
 function rawValues(raw, masked, re) {
@@ -390,8 +404,9 @@ async function issueMissing(key, c) {
 // --- Messages ---
 
 const branchRefusal = (branch, action) =>
-  `${action} refusé sur « ${branch || '(détachée)'} » : crée l'issue Linear et une branche feature/ody-XXX-… (main et master interdites, clé d'issue requise dans le nom de branche).`;
+  `${action} refusé sur « ${branch || '(détachée)'} » : reprends ou crée l'issue Linear, puis une branche qui porte son identifiant (convention du dépôt, sinon feature/<clé>-xxxx-…) ; main et master interdites.`;
 const missingIssue = (key) => `l'issue ${key} n'existe pas dans Linear : crée-la ou corrige la clé avant de continuer.`;
+const MERGE_HUMAN = 'merge réservé à l\'humain : déclare la PR prête (issue In Review, commentaire Linear) et laisse un humain merger. Merge par l\'agent seulement si l\'humain l\'a demandé explicitement et que processGate.agentMerge vaut true dans la configuration des hooks.';
 const REVIEW_MISSING = `review manquante ou périmée : poste la review 4 axes après le dernier commit (marqueur ${REVIEW_MARKER}, sections BUG, SECURITY, UX/UI, PERFORMANCE, Verdict : OK).`;
 const REVIEW_MISSING_FAST = `${REVIEW_MISSING} Un petit diff hors chemins sensibles peut passer avec une review rapide (marqueur ${FAST_MARKER}, ligne « Tests : ... », Verdict : OK).`;
 
@@ -582,6 +597,7 @@ function fastLaneFilesRefusal(c, pr, fast) {
 async function checkCommit(c) {
   const branch = currentBranch(c, c.cwd);
   if (branch === null) return null;
+  if (BASE_BRANCHES.includes(branch)) return branchRefusal(branch, 'commit');
   const key = branchKey(branch, c.pg.issueKeyPattern);
   if (!key) return branchRefusal(branch, 'commit');
   return (await issueMissing(key, c)) ? missingIssue(key) : null;
@@ -590,9 +606,9 @@ async function checkCommit(c) {
 async function checkPrCreate(c) {
   const branch = currentBranch(c, c.cwd);
   if (branch === null) return null;
+  if (BASE_BRANCHES.includes(branch)) return branchRefusal(branch, 'gh pr create');
   const key = branchKey(branch, c.pg.issueKeyPattern);
   if (!key) return branchRefusal(branch, 'gh pr create');
-  const pattern = c.pg.issueKeyPattern;
   const tail = tailOf(c);
   const texts = rawValues(tail.raw, tail.masked, PR_TEXT_FLAG_RE);
   const bodyFiles = rawValues(tail.raw, tail.masked, PR_BODY_FILE_RE);
@@ -602,14 +618,15 @@ async function checkPrCreate(c) {
     texts.push(readText(file));
   }
   // « -F - » (stdin) : le corps n'est pas inspecte, la cle doit figurer dans --title (ou --fill).
-  if (!texts.some((t) => keysIn(t, pattern).includes(key))) {
-    const fill = FILL_RE.test(tail.masked) && keysIn(lastSubject(c), pattern).includes(key);
+  if (!texts.some((t) => citesKey(t, key))) {
+    const fill = FILL_RE.test(tail.masked) && citesKey(lastSubject(c), key);
     if (!fill) return `la PR doit citer ${key} : mets la clé dans --title (branche « ${branch} »).`;
   }
   return (await issueMissing(key, c)) ? missingIssue(key) : null;
 }
 
 async function checkPrMerge(c) {
+  if (c.pg.agentMerge !== true) return MERGE_HUMAN;
   const { pos, repo } = mergeTarget(tailOf(c).raw);
   const target = [...(pos ? [pos] : []), ...(repo ? ['-R', repo] : [])];
   const view = sh(c, 'gh', ['pr', 'view', ...target, '--json', 'commits,comments,headRefName,additions,deletions,changedFiles,files,number,url'], c.cwd);
@@ -633,6 +650,11 @@ async function checkPrMerge(c) {
   if (!Array.isArray(list)) return null;
   const failing = list.filter((k) => k && FAILING_BUCKETS.includes(String(k.bucket).toLowerCase())).map((k) => String(k.name));
   return failing.length ? `checks en échec : ${failing.join(', ')}.` : null;
+}
+
+// Merge par l'API : toujours refuse (sans agentMerge : merge humain ; avec : gh pr merge, qui controle review et checks).
+async function checkApiMerge(c) {
+  return c.pg.agentMerge === true ? 'merge par gh api refusé : utilise gh pr merge, qui contrôle la review et les checks.' : MERGE_HUMAN;
 }
 
 async function checkDeploy(c) {
@@ -678,7 +700,7 @@ function denyPayload(reason) {
 
 // Chaque occurrence des commandes concernees, dans l'ordre. Un deploiement compte une fois par segment,
 // et --dry-run ne neutralise que le segment qui le porte.
-function findHits(masked, pg) {
+function findHits(masked, pg, raw = masked) {
   const hits = [];
   const add = (check, re) => {
     for (const m of masked.matchAll(re)) hits.push({ check, index: m.index, m });
@@ -686,6 +708,7 @@ function findHits(masked, pg) {
   add(checkCommit, GIT_COMMIT_RE);
   add(checkPrCreate, PR_CREATE_RE);
   add(checkPrMerge, PR_MERGE_RE);
+  for (const m of raw.matchAll(API_MERGE_RE)) hits.push({ check: checkApiMerge, index: m.index, m });
   const deploy = pg.deployPatterns.flatMap((p) => [...masked.matchAll(new RegExp(p, 'gi'))]);
   const seen = new Set();
   for (const m of deploy.sort((a, b) => a.index - b.index)) {
@@ -710,7 +733,7 @@ async function decide(input, config, deps) {
     if (pg.enabled === false) return null;
 
     const masked = maskQuoted(ti.command);
-    const hits = findHits(masked, pg);
+    const hits = findHits(masked, pg, ti.command);
     if (hits.length === 0) return null;
 
     const deadline = d.now() + GLOBAL_TIMEOUT_MS;

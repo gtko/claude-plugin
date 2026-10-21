@@ -16,7 +16,7 @@ const HANDOFF = path.join(__dirname, '..', 'handoff.js');
 const PRECOMPACT = path.join(__dirname, '..', 'pre-compact.js');
 const CWD = 'C:\\Users\\grego\\Projets\\laststream';
 const GENERIC = '/compact garde : issue en cours, branche et worktree, décisions, reste à faire, agents en cours';
-const RAPPEL = '[Routage] Delegue selon CLAUDE.md (haiku-builder par defaut, gtko-agents:haiku-builder en mode plugin), parallelise au maximum (lots independants dans le meme message) ; plan/decision/review -> opus-advisor (gtko-agents:opus-advisor en mode plugin) ; modification de code -> skill livraison (gtko-agents:livraison en mode plugin).';
+const RAPPEL = '[Routage] Delegue selon CLAUDE.md (haiku-builder par defaut, gtko-agents:haiku-builder en mode plugin), parallelise au maximum (lots independants dans le meme message) ; plan/decision/review -> opus-advisor (gtko-agents:opus-advisor en mode plugin) ; modification de code -> skill livraison (gtko-agents:livraison en mode plugin), charge AVANT la premiere edition : issue Linear reprise ou creee puis In Progress, branche liee, tests et lint, review par un sous-agent, PR Fixes <ID>, CI apres chaque push, commentaires PR et Linear traites, In Review, jamais de merge.';
 
 function tmpRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'compactage-'));

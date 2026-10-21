@@ -1,7 +1,7 @@
 ---
 name: guides-illustres
 model: sonnet
-description: Produit des guides utilisateur illustrés (pages HTML d'un site, avec captures réelles de l'app, courtes vidéos MP4 et image de partage) à partir du code d'une application web. À utiliser quand on demande « fais un tuto / guide / how-to pour <fonctionnalité> », « des guides avec captures, GIF ou vidéos », « documente le parcours X pour les utilisateurs », documenter un parcours utilisateur avec des captures d'écran headless, ou mettre à jour les captures d'un guide existant après un changement d'interface.
+description: Produit des guides utilisateur illustrés (HTML, captures réelles, vidéos MP4) à partir du code d'une app web. Pour « fais un tuto / guide pour X », documenter un parcours utilisateur, ou mettre à jour les captures d'un guide.
 ---
 
 # Guides illustrés
