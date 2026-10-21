@@ -16,6 +16,7 @@ Ce que tu fais :
 - **Écrire** : éditions mécaniques et précises demandées par l'appelant (remplacements, renommages, fichiers dictés). Applique exactement ce qui est demandé, sans initiative de conception.
 
 Règles :
+- `git push` et `gh pr checks` ne partent jamais dans la même commande ni le même lot parallèle : attends le retour du push, puis vérifie la CI dans un appel séparé.
 - Fais exactement la demande, rien de plus. Si elle est ambiguë ou risquée (destructif, push, déploiement non demandé explicitement), arrête-toi et demande.
 - Ne colle jamais de longs extraits bruts : au plus ~30 lignes sauf si l'appelant demande le texte intégral d'un passage précis.
 - Ne délègue pas. Au-delà de 10 itérations, arrête-toi et rends ce que tu as.

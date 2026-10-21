@@ -53,7 +53,7 @@ Règles de graphe : les agents Haiku ne délèguent jamais ; `sonnet-builder`, `
 
 ## Hooks
 
-Le plugin branche quatre événements sur `hooks/dispatch.js` (`hooks/hooks.json`), qui exécute les modules ci-dessous dans l'ordre. Un refus (`exit 2`, `permissionDecision: deny`) arrête la suite. Chaque module est fail-open : une erreur interne ne bloque pas Claude Code.
+Le plugin branche cinq événements sur `hooks/dispatch.js` (`hooks/hooks.json`), qui exécute les modules ci-dessous dans l'ordre. Un refus (`exit 2`, `permissionDecision: deny`) arrête la suite. Chaque module est fail-open : une erreur interne ne bloque pas Claude Code.
 
 | Événement | Fichier | Rôle | Interrupteur d'urgence |
 |---|---|---|---|
@@ -61,10 +61,11 @@ Le plugin branche quatre événements sur `hooks/dispatch.js` (`hooks/hooks.json
 | `UserPromptSubmit` | `hooks/model-router.js` | Rappel de routage, une fois par session (revient après un compactage) | aucun |
 | `UserPromptSubmit` | `hooks/context-budget.js` | Mesure le contexte : délégation à 200k, passation à 300k, blocage à 400k tokens | `CONTEXT_BUDGET=off` |
 | `PreCompact` | `hooks/pre-compact.js` | Écrit ou rafraîchit la passation avant un compactage | `HANDOFF=off` |
-| `PreToolUse` (`Agent`) | `hooks/routing-guard.js` | Refuse les sous-agents hors graphe : agent générique, modèle Opus hérité, ou prompt sans `ESCALADE:`, `DIRECT:`, `OPUS:` ou `LEAD:` là où il est exigé | aucun |
+| `PreToolUse` (`Agent`) | `hooks/routing-guard.js` | Refuse les sous-agents hors graphe : agent générique, modèle Opus hérité (un agent du dépôt sans `model:`, ou un appel avec `model:` non-Opus, passe), ou prompt sans `ESCALADE:`, `DIRECT:`, `OPUS:` ou `LEAD:` là où il est exigé | aucun |
 | `PreToolUse` (`Bash`, `PowerShell`) | `hooks/heavy-gate.js` | Limite les suites lourdes lancées en parallèle (4 suites, 40 processus node) | `HEAVY_GATE=off` (env ou commande) |
 | `PreToolUse` (`Bash`, `PowerShell`) | `hooks/process-gate.js` | Refuse commit ou PR hors process (identifiant d'issue Linear dans la branche et la PR), tout merge par l'agent, `gh pr merge` ou `gh api …/merge` (merge humain, `processGate.agentMerge`), et un déploiement hors de `main` à jour | `PROCESS_GATE=off` |
 | `PreToolUse` (tous les outils) | `hooks/tool-guard.js` | Budget d'appels par agent, anti-boucle, lectures trop larges, commandes destructrices refusées | `TOOL_GUARD=off` (tout) ; `DENY_LIST=off` (commandes destructrices seulement) |
+| `PostToolUse` (`Bash`, `PowerShell`) et `PreToolUse` | `hooks/ci-gate.js` | Refuse le passage d'une issue Linear en In Review sans `gh pr checks` vert, lancé dans un appel séparé après la fin du dernier `git push` | `CI_GATE=off` |
 
 Les interrupteurs sont des variables d'environnement à la valeur `off`, par exemple `$env:PROCESS_GATE = 'off'` en PowerShell.
 
