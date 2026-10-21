@@ -939,3 +939,190 @@ test('ODY-156 : Start-Process -ArgumentList avec 15 000 paires `" non fermées d
     assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms`);
   }
 });
+
+// ODY-158 point 1 : pwsh/powershell sans -Command n'est examiné que hors chaîne entre guillemets (faux positif sur un message de commit).
+test('ODY-158 point 1 : pwsh positionnel dans un message de commit non refusé (Bash et PowerShell) ; hors chaîne entre guillemets, examiné', () => {
+  const COMMIT = 'git commit -m "doc: pwsh \'Remove-Item -Recurse ~\' est refusé"';
+  allowed(decide(bash(sid(), COMMIT), C));
+  allowed(decide(pw(COMMIT), C));
+  allowed(decide(bash(sid(), 'echo "pwsh \'Remove-Item -Recurse ~\'"'), C));
+  allowed(decide(pw('echo "pwsh \'Remove-Item -Recurse ~\'"'), C));
+  denied(decide(bash(sid(), 'echo pwsh \'Remove-Item -Recurse ~\''), C), DENY_MSG);
+});
+
+test('ODY-158 point 1 : pwsh positionnel refusé (début, &, ;, chemin entre guillemets, lanceurs, Bash et PowerShell)', () => {
+  for (const c of [
+    "pwsh 'Remove-Item -Recurse ~'",
+    "& pwsh 'Remove-Item -Recurse ~'",
+    'x; powershell "Remove-Item -Recurse ~"',
+    '"C:\\Program Files\\PowerShell\\7\\pwsh.exe" "Remove-Item -Recurse ~"',
+    "sudo pwsh 'Remove-Item -Recurse ~'",
+    "env FOO=1 pwsh 'Remove-Item -Recurse ~'",
+    "x && timeout 5 nohup pwsh 'Remove-Item -Recurse ~'",
+  ]) {
+    denied(decide(bash(sid(), c), C), DENY_MSG);
+    denied(decide(pw(c), C), DENY_MSG);
+  }
+});
+
+test('ODY-158 point 1 : forme -Command (ou -c) toujours détectée partout, y compris dans un message', () => {
+  denied(decide(bash(sid(), 'git commit -m "pwsh -Command \'Remove-Item -Recurse ~\'"'), C), DENY_MSG);
+  denied(decide(pw('git commit -m "pwsh -c \'Remove-Item -Recurse ~\'"'), C), DENY_MSG);
+});
+
+// ODY-158 point 2 : options répétées avant un nom de shell (chaque nom ne doit plus relancer l'analyse jusqu'à la fin).
+test('ODY-158 point 2 : "pwsh -a " et "bash -a " répétés 12 000 fois décidés en moins de 200 ms (Bash et PowerShell)', () => {
+  for (const cmd of ['"' + 'pwsh -a '.repeat(12000), '"' + 'bash -a '.repeat(12000)]) {
+    for (const input of [bash(sid(), cmd), pw(cmd)]) {
+      const t0 = performance.now();
+      decide(input, C);
+      const ms = performance.now() - t0;
+      assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms`);
+    }
+  }
+});
+
+// ODY-158 point 2 : un nom de shell en valeur d'option ouvre sa propre invocation, examinée à part.
+test('ODY-158 point 2 : bash -o sh -c "rm -rf ~" refusé (l invocation sh -c est examinée)', () => {
+  denied(decide(bash(sid(), 'bash -o sh -c "rm -rf ~"'), C), DENY_MSG);
+});
+
+// ODY-158 review : pwsh positionnel refusé hors chaîne entre guillemets, quelle que soit la position (12 formes, Bash et PowerShell).
+const REVIEW_FORMS = [
+  "{ powershell 'Remove-Item -Recurse ~'; }",
+  "if ($x) { powershell 'Remove-Item -Recurse ~' }",
+  "if true; then powershell 'Remove-Item -Recurse ~'; fi",
+  "if ! true; then powershell 'Remove-Item -Recurse ~'; fi",
+  "if true; do powershell 'Remove-Item -Recurse ~'; done",
+  "if false; then :; else powershell 'Remove-Item -Recurse ~'; fi",
+  "FOO=1 powershell 'Remove-Item -Recurse ~'",
+  "sudo -u root powershell 'Remove-Item -Recurse ~'",
+  "xargs powershell 'Remove-Item -Recurse ~'",
+  "nice powershell 'Remove-Item -Recurse ~'",
+  "& 'C:\\Program Files\\PowerShell\\7\\pwsh.exe' 'Remove-Item -Recurse ~'",
+  "{ powershell -com 'Remove-Item -Recurse ~'; }",
+];
+test('ODY-158 review : pwsh positionnel refusé partout hors chaîne (12 formes, Bash et PowerShell)', () => {
+  for (const c of REVIEW_FORMS) {
+    denied(decide(bash(sid(), c), C), DENY_MSG);
+    denied(decide(pw(c), C), DENY_MSG);
+  }
+});
+
+test('ODY-158 review : nom ou chemin entre guillemets, substitution "$(...)" et abréviations de -Command refusés (Bash et PowerShell)', () => {
+  for (const c of [
+    '"pwsh" \'Remove-Item -Recurse ~\'',
+    "'C:\\Program Files\\PowerShell\\7\\pwsh.exe' 'Remove-Item -Recurse ~'",
+    '"$(pwsh \'Remove-Item -Recurse ~\')"',
+    'pwsh -co "Remove-Item -Recurse ~"',
+    'pwsh -comman "Remove-Item -Recurse ~"',
+    'pwsh -o pwsh -c "Remove-Item -Recurse ~"',
+  ]) {
+    denied(decide(bash(sid(), c), C), DENY_MSG);
+    denied(decide(pw(c), C), DENY_MSG);
+  }
+});
+
+test('ODY-158 review : texte entre guillemets, nom de shell accolé et message de commit non refusés (Bash et PowerShell)', () => {
+  for (const c of [
+    'echo "fix pwsh" "Remove-Item -Recurse ~"',
+    'mypwsh \'Remove-Item -Recurse ~\'',
+    'git commit -m "doc" -m \'pwsh "Remove-Item -Recurse ~"\'',
+  ]) {
+    allowed(decide(bash(sid(), c), C));
+    allowed(decide(pw(c), C));
+  }
+});
+
+// ODY-158 review : 'pwsh ' répété 12 000 fois aussi décidé en moins de 200 ms (comme les entrées du point 2).
+test('ODY-158 review : "pwsh " répété 12 000 fois décidé en moins de 200 ms (Bash et PowerShell)', () => {
+  for (const input of [bash(sid(), 'pwsh '.repeat(12000)), pw('pwsh '.repeat(12000))]) {
+    const t0 = performance.now();
+    decide(input, C);
+    const ms = performance.now() - t0;
+    assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms`);
+  }
+});
+
+// ODY-158 : un guillemet dans un commentaire n'ouvre aucune chaîne qui cache la commande (Bash et PowerShell).
+test("ODY-158 : pwsh caché derrière un commentaire à guillemet simple ou double refusé (Bash et PowerShell)", () => {
+  for (const c of ["x # it's\npwsh 'Remove-Item -Recurse ~' # '", 'x # it"s\npwsh \'Remove-Item -Recurse ~\' # "']) {
+    denied(decide(bash(sid(), c), C), DENY_MSG);
+    denied(decide(pw(c), C), DENY_MSG);
+  }
+});
+
+test("ODY-158 : pwsh après un commentaire <# #>, après une here-string @'...'@ (LF et CRLF) refusé (PowerShell)", () => {
+  denied(decide(pw("x <# it's #> ; pwsh 'Remove-Item -Recurse ~' <# ' #>"), C), DENY_MSG);
+  denied(decide(pw("$a = @'\nit's\n'@; pwsh 'Remove-Item -Recurse ~'; $b='"), C), DENY_MSG);
+  denied(decide(pw("$a = @'\r\nit's\r\n'@\r\npwsh 'Remove-Item -Recurse ~'"), C), DENY_MSG);
+});
+
+test("ODY-158 : pwsh après $'\\'' (Bash) et $'pwsh' refusés, rm -rf ~ caché derrière $'\\'' refusé", () => {
+  denied(decide(bash(sid(), "echo $'\\''; pwsh 'Remove-Item -Recurse ~'; echo $'\\''"), C), DENY_MSG);
+  denied(decide(bash(sid(), "echo $'\\''; rm -rf ~; echo $'\\''"), C), DENY_MSG);
+  denied(decide(bash(sid(), "$'pwsh' 'Remove-Item -Recurse ~'"), C), DENY_MSG);
+});
+
+test("ODY-158 : rm ou Remove-Item -Recurse ~ derrière un commentaire à guillemet refusés (Bash et PowerShell)", () => {
+  denied(decide(bash(sid(), "x # it's\nrm -rf ~ # '"), C), DENY_MSG);
+  denied(decide(pw("x # it's\nRemove-Item -Recurse ~ # '"), C), DENY_MSG);
+});
+
+test("ODY-158 : commentaires, here-strings et $'...' sans commande dangereuse non refusés (Bash et PowerShell)", () => {
+  for (const c of ["echo ok # it's", 'git status # it"s', "echo $'a b'; git status"]) allowed(decide(bash(sid(), c), C));
+  for (const c of ["Get-ChildItem # it's", "git status <# it's #>", "$a = @'\nit's\n'@"]) allowed(decide(pw(c), C));
+});
+
+// ODY-158 : 12 000 commentaires ou $' d'affilée, here-string non fermée (un seul masque), décidés en moins de 200 ms.
+// Les here-strings PowerShell ne sont testées qu'en PowerShell : en Bash, "'\n" fait autant de paires '...' à masquer.
+test("ODY-158 : commentaires, here-strings et $'...' répétés 12 000 fois décidés en moins de 200 ms (Bash et PowerShell)", () => {
+  const timed = (input) => {
+    const t0 = performance.now();
+    decide(input, C);
+    const ms = performance.now() - t0;
+    assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms`);
+  };
+  for (const s of ['# '.repeat(12000), "x # it's\n".repeat(12000), "$'".repeat(12000), "$'" + 'a b '.repeat(4000) + "'"]) timed(bash(sid(), s));
+  for (const s of ['# '.repeat(12000), "x # it's\n".repeat(12000), '<# '.repeat(12000), "@'\n".repeat(12000), "@'\n" + 'x '.repeat(6000) + "\n'@"]) timed(pw(s));
+});
+
+// ODY-158 review 3 : le parseur tient # après { ou = pour un commentaire ; a@' n'ouvre pas de here-string (A, B, C).
+test("ODY-158 review 3 : pwsh caché par # après { ou =, ou par @' après un mot, refusé (PowerShell)", () => {
+  denied(decide(pw("& {#'\npwsh 'Remove-Item -Recurse ~'\n#'\n}"), C), DENY_MSG);
+  denied(decide(pw("$a=#'\npwsh 'Remove-Item -Recurse ~'\n#'"), C), DENY_MSG);
+  denied(decide(pw("echo a@'\nx'; pwsh 'Remove-Item -Recurse ~'\n'@"), C), DENY_MSG);
+});
+
+// ODY-158 review 4 : en PowerShell, # commente aussi juste après la fin d'un jeton ('a'#, $a#, ]#, >#, 1#).
+test("ODY-158 review 4 : pwsh caché par # collé à la fin d'un jeton, refusé (PowerShell)", () => {
+  for (const pre of ["$a", "echo 'a'", 'echo "a"', 'echo ]', '$x[0]', 'echo a >x', '[int]1']) {
+    denied(decide(pw(pre + "#'\npwsh 'Remove-Item -Recurse ~'\n#'"), C), DENY_MSG);
+  }
+  allowed(decide(pw('git commit -m "doc: pwsh \'Remove-Item -Recurse ~\' est refusé"'), C));
+});
+
+// ODY-158 review 3 : le masque guillemets seuls ne doit pas être quadratique (12 000 paires avec espaces, Bash et PowerShell).
+test("ODY-158 review 3 : 12 000 paires de guillemets avec espaces décidées en moins de 200 ms (Bash et PowerShell)", () => {
+  for (const s of ["'a b' ".repeat(12000), "'a\nb' ".repeat(12000)]) {
+    for (const input of [bash(sid(), s), pw(s)]) {
+      const t0 = performance.now();
+      decide(input, C);
+      const ms = performance.now() - t0;
+      assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms`);
+    }
+  }
+});
+
+// ODY-162 : sauts de ligne suivis de guillemets (30 000 fois) et paires de guillemets avec espaces (24 000 fois),
+// décidés en moins de 200 ms (Bash et PowerShell).
+test('ODY-162 : "\\n\\"a" répété 30 000 fois et "\\"a b\\" " répété 24 000 fois décidés en moins de 200 ms (Bash et PowerShell)', () => {
+  for (const s of ['\n"a'.repeat(30000), '"a b" '.repeat(24000)]) {
+    for (const input of [bash(sid(), s), pw(s)]) {
+      const t0 = performance.now();
+      decide(input, C);
+      const ms = performance.now() - t0;
+      assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms`);
+    }
+  }
+});

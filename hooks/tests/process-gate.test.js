@@ -650,28 +650,57 @@ test('prefixe ! : ! cd ../autre && git commit -m m contrôle le commit dans ../a
   await commitRefusedIn(t, '! cd ../autre && git commit -m m', OTHER_WIN);
 });
 
-test('prefixe then : if true; then cd ../autre; git commit -m m; fi contrôle le commit dans ../autre', async (t) => {
-  await commitRefusedIn(t, 'if true; then cd ../autre; git commit -m m; fi', OTHER_WIN);
+// Bloc conditionnel (then, do, else, elif) : le cd peut ne pas avoir lieu, donc dossier inconnu (fail-open) :
+// rien n'est controle et aucun appel externe. Toutes les branches sont sur main, donc un controle refuserait le commit.
+async function unknownDirAfter(t, command, tool = 'Bash') {
+  const d = fakeDeps({ runs: ON_BRANCH('main') });
+  assert.strictEqual(await decide({ tool_name: tool, tool_input: { command }, cwd: REPO_WIN }, cfgFor(t), d), null, command);
+  noCalls(d);
+}
+
+test('prefixe then : if true; then cd ../autre; fi; git commit -m m → dossier inconnu après le bloc', async (t) => {
+  await unknownDirAfter(t, 'if true; then cd ../autre; fi; git commit -m m');
 });
 
-test('prefixe do : for d in 1; do cd ../autre; git commit -m m; done contrôle le commit dans ../autre', async (t) => {
-  await commitRefusedIn(t, 'for d in 1; do cd ../autre; git commit -m m; done', OTHER_WIN);
+test('prefixe do : for d in 1; do cd ../autre; done; git commit -m m → dossier inconnu après la boucle', async (t) => {
+  await unknownDirAfter(t, 'for d in 1; do cd ../autre; done; git commit -m m');
 });
 
-test('prefixe else : if false; then echo a; else cd ../autre; git commit -m m; fi contrôle le commit dans ../autre', async (t) => {
-  await commitRefusedIn(t, 'if false; then echo a; else cd ../autre; git commit -m m; fi', OTHER_WIN);
+test('prefixe else : if false; then echo a; else cd ../autre; fi; git commit -m m → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if false; then echo a; else cd ../autre; fi; git commit -m m');
 });
 
-test('prefixe elif : if false; then echo a; elif cd ../autre; then git commit -m m; fi contrôle le commit dans ../autre', async (t) => {
-  await commitRefusedIn(t, 'if false; then echo a; elif cd ../autre; then git commit -m m; fi', OTHER_WIN);
+test('prefixe elif : if false; then echo a; elif cd ../autre; then echo b; fi; git commit -m m → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if false; then echo a; elif cd ../autre; then echo b; fi; git commit -m m');
 });
 
-test('bloc PowerShell : if ($ok) { Set-Location ../autre; git commit -m m } contrôle le commit dans ../autre', async (t) => {
-  await commitRefusedIn(t, 'if ($ok) { Set-Location ../autre; git commit -m m }', OTHER_WIN, 'PowerShell');
+test('bloc then sur plusieurs lignes : le cd de la ligne suivante est conditionnel → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if true; then\ncd ../autre\nfi\ngit commit -m m');
 });
 
-test('bloc PowerShell ferme avant le commit : if ($ok) { Set-Location ../autre } ; git commit -m m contrôle ../autre', async (t) => {
-  await commitRefusedIn(t, 'if ($ok) { Set-Location ../autre } ; git commit -m m', OTHER_WIN, 'PowerShell');
+test('cd dans le bloc then suivi d\'un commit dans le même bloc : dossier inconnu (le cd ne fait pas foi)', async (t) => {
+  await unknownDirAfter(t, 'if true; then cd ../autre; git commit -m m; fi');
+});
+
+test('pushd conditionnel : pushd ../autre && if true; then popd; fi; git commit -m m → pile et dossier inconnus', async (t) => {
+  await unknownDirAfter(t, 'pushd ../autre && if true; then popd; fi; git commit -m m');
+});
+
+test('then sans cd : if true; then echo a; fi; git commit -m m reste contrôlé dans le dossier de départ', async (t) => {
+  await commitRefusedIn(t, 'if true; then echo a; fi; git commit -m m', REPO_N);
+});
+
+test('prefixe { : { cd ../autre; }; git commit -m m reste suivi après la fermeture du bloc', async (t) => {
+  await commitRefusedIn(t, '{ cd ../autre; }; git commit -m m', OTHER_WIN);
+});
+
+// ODY-161 : un cd dans un bloc PowerShell (if ($ok) { ... }) est conditionnel, y compris pour le commit qui suit le bloc.
+test('bloc PowerShell : if ($ok) { Set-Location ../autre; git commit -m m } → dossier inconnu (cd conditionnel)', async (t) => {
+  await unknownDirAfter(t, 'if ($ok) { Set-Location ../autre; git commit -m m }', 'PowerShell');
+});
+
+test('bloc PowerShell ferme avant le commit : if ($ok) { Set-Location ../autre } ; git commit -m m → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if ($ok) { Set-Location ../autre } ; git commit -m m', 'PowerShell');
 });
 
 test('pushd ../autre && git commit -m m : le commit est contrôlé dans ../autre', async (t) => {
@@ -710,6 +739,78 @@ test('pile pushd/popd inconnue (popd sans pushd, pushd sans dossier) : fail-open
     assert.strictEqual(await decide(shell(cmd, tool), cfgFor(t), d), null, cmd);
     noCalls(d);
   }
+});
+
+// --- ODY-161 : changement de dossier conditionnel (bloc Bash en milieu de commande, && / ||, accolades PowerShell) ---
+
+test('ODY-161 : cd dans un bloc if … fi suivi d\'un commit → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if c; then echo a; cd ../x; fi; git commit -m "ody-1 x"');
+});
+
+test('ODY-161 : cd après un bloc if imbriqué (then if … fi) reste conditionnel → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if c; then if d; then echo a; fi; cd ../x; fi; git commit -m m');
+});
+
+test('ODY-161 : groupe { … } après && ou || : le cd qu\'il contient est conditionnel → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'x && { y; cd ../x; }; git commit -m m');
+  await unknownDirAfter(t, 'x || { cd ../x; }; git commit -m m');
+  await unknownDirAfter(t, 'test -d r || { mkdir r; cd r; }; git commit -m m');
+});
+
+test('ODY-161 : cd ../autre && { git commit -m m; } contrôle le commit dans ../autre', async (t) => {
+  const d = fakeDeps({ runs: branchBy({ [REPO_N]: 'main' }) });
+  await decide(inRepo('cd ../autre && { git commit -m m; }'), cfgFor(t), d);
+  assert.deepStrictEqual(d.runCalls.map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN]);
+});
+
+test('ODY-161 : false && cd ../x; git commit -m m → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'false && cd ../x; git commit -m m');
+});
+
+test('ODY-161 : x || cd ../x; git commit -m m → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'x || cd ../x; git commit -m m');
+});
+
+test('ODY-161 : cd ../autre || git commit -m m → dossier inconnu (le commit tourne si le cd a échoué)', async (t) => {
+  await unknownDirAfter(t, 'cd ../autre || git commit -m m');
+});
+
+test('ODY-161 : if ($false) { Set-Location ../x }; git commit -m m (PowerShell) → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if ($false) { Set-Location ../x }; git commit -m m', 'PowerShell');
+});
+
+test('ODY-161 : try { Set-Location ../x }; git commit -m m (PowerShell, bloc non reconnu) → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'try { Set-Location ../x }; git commit -m m', 'PowerShell');
+});
+
+test('ODY-161 : cd ../autre; git commit -m m (cd simple, non conditionnel) reste suivi', async (t) => {
+  await commitRefusedIn(t, 'cd ../autre; git commit -m m', OTHER_WIN);
+});
+
+test('ODY-161 : après fi, un cd ../autre non conditionnel est suivi : if c; then echo a; fi; cd ../autre; git commit -m m', async (t) => {
+  await commitRefusedIn(t, 'if c; then echo a; fi; cd ../autre; git commit -m m', OTHER_WIN);
+});
+
+// --- ODY-162 : replay des changements de dossier en une passe (pas de relecture du préfixe à chaque cd), < 200 ms ---
+
+async function decidedFast(t, command) {
+  const d = fakeDeps({ runs: ON_BRANCH('main') });
+  const t0 = performance.now();
+  await decide(shell(command), cfgFor(t), d);
+  const ms = performance.now() - t0;
+  assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms : ${command.slice(0, 30)}`);
+}
+
+test('ODY-162 : cd 20 000 fois d\'affilée décidé en moins de 200 ms', async (t) => {
+  await decidedFast(t, 'cd a; '.repeat(20000) + 'git commit -m "x"');
+});
+
+test('ODY-162 : if … fi répété 10 000 fois décidé en moins de 200 ms', async (t) => {
+  await decidedFast(t, 'if x; then cd a; fi; '.repeat(10000) + 'git commit -m "x"');
+});
+
+test('ODY-162 : then cd répété 20 000 fois décidé en moins de 200 ms', async (t) => {
+  await decidedFast(t, 'then cd a; '.repeat(20000) + 'git commit -m "x"');
 });
 
 // --- Dépôts exclus (processGate.excludeRepos) ---

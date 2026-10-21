@@ -60,8 +60,20 @@ const PR_BODY_FILE_RE = /(?:^|\s)(?:--body-file|-F)(?:=|\s+)("(?:[^"\\]|\\.)*"|'
 const FILL_RE = /(?:^|\s)(?:--fill|-f)(?=\s|$)/;
 const DRY_RUN_RE = /(?:^|\s)--dry-run(?=\s|$)/;
 // Changements de dossier : prefixes de bloc optionnels ({, !, then, do, else, elif), mot-cle (masque) puis
-// argument lu sur le texte brut, jusqu'au prochain point de coupure. Groupe 1 : verbe, groupe 2 : reste de la piece.
-const CD_PIECE_RE = /^\s*(?:(?:\{\s*|!\s+|(?:then|do|else|elif)\s+))*(cd|set-location|sl|pushd|push-location|popd|pop-location)(?![\w-])([\s\S]*)$/i;
+// argument lu sur le texte brut, jusqu'au prochain point de coupure. Groupe 1 : prefixes (espaces compris),
+// groupe 2 : verbe, groupe 3 : reste de la piece.
+const CD_PIECE_RE = /^(\s*(?:\{\s*|!\s+|(?:then|do|else|elif)\s+)*)(cd|set-location|sl|pushd|push-location|popd|pop-location)(?![\w-])([\s\S]*)$/i;
+// Fin de morceau conditionnelle : then, do, else ou elif suivi seulement d'espaces, `{`, `!` ou `(`. Testee sur le
+// morceau seul (le mot-cle precedent est maintenu pendant la passe, ODY-162) : jamais sur le prefixe depuis 0.
+const BLOCK_TAIL_RE = /(?<![\w-])(?:then|do|else|elif)(?![\w-])[\s{!(]*$/i;
+const BLOCK_CHARS_RE = /^[\s{!(]*$/;
+// Mots-cles de bloc Bash en tete de morceau (apres { ! then do else elif) : groupe 1 ouvrant (+1), groupe 2 fermant (-1).
+const BASH_KW_RE = /^\s*(?:(?:\{|!)\s*|(?:then|do|else|elif)\s+)*(?:(if|while|until|for|case|select)|(fi|done|esac))(?![\w-])/i;
+// Mot de changement de dossier n'importe ou dans un morceau (cd non reconnu en tete, comme `try { Set-Location x }`).
+const CD_WORD_RE = /(?<![\w-])(?:cd|set-location|sl|pushd|push-location|popd|pop-location)(?![\w-])/i;
+// Longueur max d'un dossier suivi : au-dela, dossier inconnu (fail-open). Sans cette borne, un chemin relatif qui
+// grandit a chaque cd serait renormalise en entier a chaque etape (cout quadratique).
+const DIR_MAX_LEN = 1024;
 const CD_ARG_RE = /^\s*(?:-(?:literal)?path\s+)?("[^"]*"|'[^']*'|[^\s-]\S*)?\s*$/i;
 // Verbe -> effet : cd remplace le dossier, pushd l'empile puis remplace, popd le depile.
 const CD_VERB = { cd: 'cd', 'set-location': 'cd', sl: 'cd', pushd: 'pushd', 'push-location': 'pushd', popd: 'popd', 'pop-location': 'popd' };
@@ -144,26 +156,78 @@ function resolvePath(base, raw) {
   return base === null ? null : P.resolve(base, s);
 }
 
-// Dossier effectif a la position `index` : replay, dans l'ordre, des cd / Set-Location / pushd / popd precedents.
-// Pile de sous-shells : chaque `(` sauvegarde le dossier courant et la pile pushd, chaque `)` les restaure, donc un
-// cd ou un pushd ne deborde pas au-dela de sa parenthese. Pile pushd : pushd empile le dossier courant, popd le depile ;
-// pile vide ou popd avec argument = dossier inconnu. Null si un changement de dossier est illisible ou une variable (fail-open).
+// Dossier effectif a la position `index` : replay, dans l'ordre, des changements de dossier precedents, en une seule
+// passe sur les morceaux (ODY-161, ODY-162). Etat maintenu : pile de sous-shells (chaque `(` sauvegarde l'etat, chaque
+// `)` le restaure, donc un cd ne deborde pas de sa parenthese), pile pushd / popd, profondeur des blocs Bash (if, while,
+// until, for, case, select ... fi, done, esac), accolades ouvertes (`if (...) {`, `try {` : bloc conditionnel ; `{` en
+// tete de commande : groupe), mot-cle du morceau precedent (then, do, else, elif) et chaine && / || en cours.
+// Dossier inconnu (null, fail-open) : changement conditionnel (bloc, cd apres ||, pile videe avec), chemin illisible,
+// variable ou trop long. Un cd apres && ne fixe le dossier que pour les commandes atteintes par && seulement : un ;,
+// un | ou une fin de ligne apres lui rend le dossier inconnu.
 function effectiveDirAt(base, index) {
   const head = base.masked.slice(0, index);
+  const bash = base.shell !== 'PowerShell';
   const saved = [];
+  const braces = [];     // accolades ouvertes : true si le bloc est conditionnel
+  let condBraces = 0;    // accolades conditionnelles ouvertes
+  let depth = 0;         // profondeur des blocs Bash ouverts
+  let tailIn = false;    // le morceau precedent finit par then / do / else / elif (sans coupure qui l'interrompt)
   let dir = base.baseCwd;
   let dirs = [];
+  let pend = false;      // dossier fixe par un cd apres && : incertain tant qu'un ; | fin de ligne ne le confirme pas
+  let chain = false;     // un changement de dossier dans la chaine && / || en cours
+  let inSep = null;      // separateur qui precede le morceau
   let start = 0;
+  // Accolades d'un texte : un `{` en tete (lead) apres un separateur neutre ouvre un groupe, sinon un bloc conditionnel.
+  const openBraces = (text, lead, neutral) => {
+    if (!text.includes('{')) return;
+    for (const ch of text) {
+      if (ch === '{') {
+        const cond = !(lead && neutral);
+        braces.push(cond);
+        if (cond) condBraces++;
+      } else if (!/\s/.test(ch)) {
+        lead = false;
+      }
+    }
+  };
   for (const cut of [...head.matchAll(CUT_RE), null]) {
     const end = cut ? cut.index : head.length;
-    const sep = cut ? cut[0] : '';
-    const kw = CD_PIECE_RE.exec(base.masked.slice(start, end));
+    const outSep = cut ? cut[0] : '';
+    const piece = base.masked.slice(start, end);
+    // Separateur qui precede le morceau : ; | fin de ligne et fin de bloc closent la chaine && / ||.
+    if (inSep === ';' || inSep === '|' || inSep === '\r' || inSep === '\n' || inSep === '}') {
+      if (pend) { dir = null; dirs = []; }
+      pend = false;
+      chain = false;
+    } else if (inSep === '||' && chain) {
+      // Apres || : la commande suivante tourne si le changement precedent a echoue, donc dossier inconnu.
+      dir = null;
+      dirs = [];
+      pend = false;
+    }
+    // Apres && ou ||, un groupe { ... } depend de la commande precedente : il n'est pas neutre.
+    const neutral = inSep === null || inSep === ';' || inSep === '\r' || inSep === '\n';
+    const kw = CD_PIECE_RE.exec(piece);
+    const pre = kw ? kw[1] : '';
+    if (bash) {
+      const word = BASH_KW_RE.exec(piece);
+      if (word) depth = word[1] ? depth + 1 : Math.max(0, depth - 1);
+    }
+    openBraces(pre, true, neutral);
+    const condCtx = depth > 0 || condBraces > 0 || BLOCK_TAIL_RE.test(pre) || (BLOCK_CHARS_RE.test(pre) && tailIn);
+    openBraces(piece.slice(pre.length), !kw, neutral);
     if (kw) {
-      const verb = CD_VERB[kw[1].toLowerCase()];
+      const verb = CD_VERB[kw[2].toLowerCase()];
       // Argument lu sur le texte brut. Un changement suivi d'une parenthese ouvrante (cd (cmd)) : dossier inconnu.
-      const arg = CD_ARG_RE.exec(base.cmd.slice(end - kw[2].length, end));
-      const known = Boolean(arg) && sep !== '(';
-      if (verb === 'popd') {
+      const arg = CD_ARG_RE.exec(base.cmd.slice(end - kw[3].length, end));
+      const known = Boolean(arg) && outSep !== '(';
+      const cond = condCtx || inSep === '||';
+      if (cond) {
+        // Changement conditionnel : il peut ne pas avoir lieu, donc dossier inconnu. Une pile modifiee le devient aussi.
+        dir = null;
+        if (verb !== 'cd') dirs = [];
+      } else if (verb === 'popd') {
         const back = known && arg[1] === undefined && dirs.length > 0;
         dir = back ? dirs.pop() : null;
         if (!back) dirs = [];
@@ -172,14 +236,30 @@ function effectiveDirAt(base, index) {
         if (!known) dir = null;
         else if (arg[1] === undefined) dir = verb === 'pushd' ? null : os.homedir();
         else dir = resolvePath(dir, arg[1]);
+        if (dir !== null && dir.length > DIR_MAX_LEN) dir = null;
       }
+      pend = !cond && inSep === '&&';
+      chain = true;
+    } else if (condBraces > 0 && CD_WORD_RE.test(piece)) {
+      // Changement de dossier non reconnu en tete de morceau, dans un bloc (try { Set-Location x }) : dossier inconnu.
+      dir = null;
+      dirs = [];
+      pend = false;
+      chain = true;
     }
-    if (sep === '(') {
-      saved.push({ dir, dirs: dirs.slice() });
-    } else if (sep === ')' && saved.length) {
-      ({ dir, dirs } = saved.pop());
+    if (outSep === '(') {
+      saved.push({ dir, dirs: dirs.slice(), pend, chain });
+      pend = false;
+      chain = false;
+    } else if (outSep === ')' && saved.length) {
+      ({ dir, dirs, pend, chain } = saved.pop());
+    } else if (outSep === '}' && braces.length) {
+      if (braces.pop()) condBraces--;
     }
-    start = end + sep.length;
+    // Mot-cle de bloc transmis au morceau suivant seulement si une coupure ( \r \n ) ne l'interrompt pas.
+    tailIn = (outSep === '(' || outSep === '\r' || outSep === '\n') && (BLOCK_TAIL_RE.test(piece) || (BLOCK_CHARS_RE.test(piece) && tailIn));
+    inSep = outSep;
+    start = end + outSep.length;
   }
   return dir;
 }
@@ -637,6 +717,7 @@ async function decide(input, config, deps) {
     const base = {
       cmd: ti.command,
       masked,
+      shell: input.tool_name,
       baseCwd: input.cwd ? String(input.cwd) : process.cwd(),
       pg,
       cfg,

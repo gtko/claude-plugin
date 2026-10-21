@@ -303,13 +303,23 @@ const HEREDOC_OP = /\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'[^']*'|(?<!<)<<(?!<)(-?)\s*
 const SHELL_WORD = /(?:^|[\s;&|(])(?:bash|sh|zsh|pwsh|powershell|cmd|eval|source|xargs)(?:\.exe)?(?=\s|$)/i;
 // Arguments entre guillemets des wrappers shell. Chaque forme tokenise ses guillemets à sa façon :
 //  - bash, sh, zsh (avec -c) et eval : \ échappe dans "...", ` reste un caractère ordinaire ;
-//  - pwsh, powershell : \ n'échappe rien ; dans "..." un guillemet se double ("") et ` échappe ; -Command est facultatif (positionnel) ;
+//  - pwsh, powershell : \ n'échappe rien ; dans "..." un guillemet se double ("") et ` échappe ;
+//    -Command (ou -c) : examiné partout ; forme positionnelle (sans -Command) : hors chaîne entre guillemets (SHELL_NAME_PS_POS) ;
 //  - cmd (/c ou /k) : aucun échappement ;
 //  - Start-Process <shell> -ArgumentList : chaque chaîne de la liste est une ligne de commande du shell.
 // Le wrapper suit un début, un séparateur, une parenthèse, un guillemet ou un \ ou / (chemin : "C:\...\pwsh.exe", /usr/bin/bash).
 // Groupe 1 : wrapper (absent pour eval) ; groupe 2 : contenu entre guillemets doubles ; groupe 3 : entre simples.
-const SHELL_ARG_POSIX = /(?:^|[\s;&|(\\/"'])(?:((?:bash|sh|zsh)(?:\.exe)?)["']?\s+(?:-[a-z]+(?:\s+[a-z]\w*)?\s+)*?-[a-z]*c|eval)\s+(?:"((?:\\[\s\S]|""|[^"\\])*)"|'([^']*)')/gi;
-const SHELL_ARG_PS = /(?:^|[\s;&|(\\/"'])((?:pwsh|powershell)(?:\.exe)?)["']?\s+(?:-[a-z]+(?:\s+[a-z]\w*)?\s+)*?(?:-command\s+)?(?:"((?:\x60[\s\S]|""|[^"\x60])*)"|'((?:''|[^'])*)')/gi;
+// Options avant -c / -Command : une valeur d'option ne peut pas être un nom de shell (il ouvre sa propre
+// invocation, examinée à part). Sans cela, chaque nom de shell relançait la boucle jusqu'à la fin : O(n²).
+const SHELL_ARG_POSIX = /(?:^|[\s;&|(\\/"'])(?:((?:bash|sh|zsh)(?:\.exe)?)["']?\s+(?:-[a-z]+(?:\s+(?!(?:bash|sh|zsh)(?:\.exe)?["']?\s)[a-z]\w*)?\s+)*?-[a-z]*c|eval)\s+(?:"((?:\\[\s\S]|""|[^"\\])*)"|'([^']*)')/gi;
+// Avec -Command (ou -c) : partout où le wrapper apparaît.
+const SHELL_ARG_PS = /(?:^|[\s;&|(\\/"'])((?:pwsh|powershell)(?:\.exe)?)["']?\s+(?:-[a-z]+(?:\s+(?!(?:pwsh|powershell)(?:\.exe)?["']?\s)[a-z]\w*)?\s+)*?--?c(?:o(?:m(?:m(?:a(?:n(?:d)?)?)?)?)?)?\s+(?:"((?:\x60[\s\S]|""|[^"\x60])*)"|'((?:''|[^'])*)')/gi;
+// Sans -Command (positionnel) : pwsh ou powershell hors chaîne entre guillemets (masque de shellMask), suivi d'un argument
+// entre guillemets. Un nom ou un chemin entre guillemets ("C:\...\pwsh.exe") compte comme nom de shell (voir shellMask).
+// Le motif tourne sur le masque (même longueur que la commande) ; l'argument est lu sur le texte brut, au même index.
+const SHELL_NAME_PS_POS = /(?<![\w.-])(?:pwsh|powershell)(?:\.exe)?["']?\s+(?:-[a-z]+(?:\s+(?!(?:pwsh|powershell)(?:\.exe)?["']?\s)[a-z]\w*)?\s+)*?(?=["'])/gi;
+// Argument PowerShell entre guillemets, lu sur le texte brut à l'index donné (collant : aucune recherche).
+const PS_ARG_AT = /"((?:\x60[\s\S]|""|[^"\x60])*)"|'((?:''|[^'])*)'/y;
 // cmd : groupe 1 le wrapper, groupe 2 le contenu entre guillemets doubles (sans échappement).
 const SHELL_ARG_CMD = /(?:^|[\s;&|(\\/"'])((?:cmd)(?:\.exe)?)["']?\s+(?:\/[a-z]\s+)*?\/[ck]\s+"([^"]*)"/gi;
 // Contenu d'une chaîne PowerShell : "" vaut ", ` échappe le caractère suivant ; '' vaut ' (chaîne simple).
@@ -366,37 +376,81 @@ function startArgSegments(body) {
 const DQ_ESCAPE = /\\(["$`\\])/g;
 // Longueur max d'un segment examiné ; au-delà, le segment est tronqué.
 const SEG_MAX = 16384;
-// Début de commande (après un séparateur ou une parenthèse) : son texte entre guillemets est exécuté.
-const CMD_START = /(?:^|[;&|(`\r\n])\s*$/;
-// Juste après -C : chemin du dépôt, gardé visible pour la résolution de branche.
-const GIT_C_BEFORE = /-C\s+$/i;
+// Début de commande : avant off, seulement des espaces jusqu'à un début de texte, un retour ligne, ou un séparateur
+// ; & | ( ` (après le séparateur). Équivalent à /(?:^|[;&|(`\r\n])\s*$/ sur str.slice(0, off), mais parcours arrière :
+// un test par correspondance sur le préfixe entier coûtait O(n²) (12 000 guillemets sur 120 Ko).
+// Son texte entre guillemets est exécuté.
+function atCommandStart(str, off) {
+  let j = off;
+  while (j > 0 && /\s/.test(str[j - 1])) {
+    if (str[j - 1] === '\r' || str[j - 1] === '\n') return true;
+    j--;
+  }
+  return j === 0 || ';&|(`'.includes(str[j - 1]);
+}
+// Juste après -C (suivi d'espaces, comme /-C\s+$/i sur str.slice(0, off)) : chemin du dépôt, gardé visible.
+function afterGitC(str, off) {
+  let j = off;
+  while (j > 0 && /\s/.test(str[j - 1])) j--;
+  return j < off && j >= 2 && str[j - 2] === '-' && str[j - 1].toLowerCase() === 'c';
+}
 
-// Motifs de guillemets selon l'outil. Bash : \ échappe ; "..." et '...' n'ont pas d'échappement interne.
+// Motifs de guillemets de PowerShell, utilisés par maskQuoted (garde de sortie, grâce de budget).
 // PowerShell : ` échappe ; dans "..." et '...' un guillemet se double ("" et ''), \ n'échappe rien ;
 // “ ” „ et ‘ ’ ‚ ‛ sont aussi des guillemets (ils ouvrent ou ferment une chaîne).
-const QUOTES_BASH = /\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'[^']*'/g;
 const QUOTES_PS = /`[\s\S]|["“”„](?:`[\s\S]|""|[^"“”„`])*["“”„]|['‘’‚‛](?:''|[^'‘’‚‛])*['‘’‚‛]/g;
+// Guillemets Bash seuls (interprétation de main) : \ échappe ; "..." et '...' n'ont pas d'échappement interne.
+const QUOTES_BASH = /\\[\s\S]|"(?:\\[\s\S]|[^"\\])*"|'[^']*'/g;
+// Tokenizers des masques de décision (maskPhrases, shellMask). Le premier motif qui commence à une position gagne.
+// Bash : \ échappe ; "..." et '...' n'ont pas d'échappement interne ; $'...' suit ses échappements.
+// PowerShell : ` échappe ; "" et '' se doublent ; \ n'échappe rien.
+// Commentaires (# et <# #>) : laissés VISIBLES, leurs guillemets n'ouvrent rien. Bash : # en début de mot (précédé
+// d'un espace ou de ; & | ( )). PowerShell : # après un espace, un séparateur, { } , ou = (le parseur le tient pour un commentaire).
+// Here-strings @'...'@ et @"..."@ (retour ligne requis) : le @ doit suivre un début de texte, un espace ou & ( ) , ; { } | < > @ ].
+// Après un mot (a@'), ce n'est pas une here-string : le guillemet ouvre une chaîne ordinaire.
+const TOKENS_BASH = /\\[\s\S]|(?<![^\s;&|()])#[^\r\n]*|\$'(?:\\[\s\S]|[^'\\])*'|"(?:\\[\s\S]|[^"\\])*"|'[^']*'/g;
+const TOKENS_PS = /`[\s\S]|(?<![^\s;&|(){},=])#[^\r\n]*|<#(?:[^#]|#(?!>))*(?:#>|$)|(?<![^\s&(),;{}|<>@\]])@'(?=\r?\n)(?:[^\n]|\n(?!'@))*(?:\r?\n'@|$)|(?<![^\s&(),;{}|<>@\]])@"(?=\r?\n)(?:[^\n]|\n(?!"@))*(?:\r?\n"@|$)|["“”„](?:`[\s\S]|""|[^"“”„`])*["“”„]|['‘’‚‛](?:''|[^'‘’‚‛])*['‘’‚‛]/g;
+// PowerShell : # commente aussi juste après la fin d'un jeton ('a'#, $a#, ]#, >#, 1#) ; variante où tout # ouvre un commentaire.
+const TOKENS_PS_HASH = new RegExp(TOKENS_PS.source.replace('(?<![^\\s;&|(){},=])#', '#'), 'g');
+// Trois masques de décision, examinés ensemble (denySegments) : un refus de l'un d'eux suffit.
+//  - 'tokens' : tokenisation réelle (TOKENS_*) ;
+//  - 'hash' : PowerShell, tout # ouvre un commentaire (TOKENS_PS_HASH) ; Bash : TOKENS_BASH ;
+//  - 'quotes' : guillemets seuls (QUOTES_*), l'interprétation de main, gardée en défense en profondeur.
+const MASKS = ['tokens', 'hash', 'quotes'];
+const maskRe = (tool, mask) => {
+  if (mask === 'hash') return tool === 'PowerShell' ? TOKENS_PS_HASH : TOKENS_BASH;
+  if (mask === 'quotes') return tool === 'PowerShell' ? QUOTES_PS : QUOTES_BASH;
+  return tool === 'PowerShell' ? TOKENS_PS : TOKENS_BASH;
+};
+// Masques distincts pour l'outil (en Bash, 'hash' vaut 'tokens' : une seule passe).
+const masksFor = (tool) => (tool === 'PowerShell' ? MASKS : MASKS.filter((m) => m !== 'hash'));
 
 // Chaîne entre guillemets doubles qui s'exécute en partie : "$(...)" (Bash et PowerShell), "`...`" (Bash seulement).
 // Elle n'est pas masquée : splitSegments coupe sur ( et ` et son contenu devient un segment examiné.
 const DQ_OPEN = /^["“”„]/;
 function substitutes(m, tool) {
+  // Here-string PowerShell (@'...'@, @"..."@) : même règle, un $( à l'intérieur la rend visible.
+  if (m[0] === '@') return m.includes('$(');
   if (!DQ_OPEN.test(m)) return false;
   const inner = m.slice(1, -1);
   return inner.includes('$(') || (tool !== 'PowerShell' && inner.includes('`'));
 }
 
+// Commentaire (# ou <#) : reste visible aux motifs, ses guillemets n'ouvrent rien.
+const isComment = (m) => m[0] === '#' || m[0] === '<';
+// Masque de même longueur : premier caractère (ouvrant) et dernier (fermant) gardés, le reste en x.
+const maskOf = (m) => m[0] + 'x'.repeat(m.length - 2) + m[m.length - 1];
+
 // Texte entre guillemets qui contient un espace : masqué (un echo ou un message n'est pas exécuté).
 // Visible : début de commande ("C:\Program Files\...\git.exe" push) et argument de -C.
 // Un mot seul entre guillemets ("$HOME", "C:\") reste visible aux motifs.
-function maskPhrases(s, tool) {
-  return s.replace(tool === 'PowerShell' ? QUOTES_PS : QUOTES_BASH, (m, off, str) => {
+function maskPhrases(s, tool, mask) {
+  return s.replace(maskRe(tool, mask), (m, off, str) => {
     // Échappement hors guillemets (\" \' \; en Bash, `" en PowerShell) : jamais masqué, il reste visible aux motifs.
-    if (m[0] === '\\' || m[0] === '`') return m;
+    if (m[0] === '\\' || m[0] === '`' || isComment(m)) return m;
     if (substitutes(m, tool)) return m;
-    const before = str.slice(0, off);
-    if (!/\s/.test(m.slice(1, -1)) || CMD_START.test(before) || GIT_C_BEFORE.test(before)) return m;
-    return m[0] + 'x'.repeat(m.length - 2) + m[0];
+    if (!/\s/.test(m.slice(1, -1)) || atCommandStart(str, off) || afterGitC(str, off)) return m;
+    return maskOf(m);
   });
 }
 
@@ -427,8 +481,34 @@ function stripHeredocs(cmd) {
   return out.join('\n');
 }
 
+// Masque des chaînes entre guillemets (même longueur que la commande) : leur contenu n'est pas du code du shell.
+// Restent visibles : les échappements hors guillemets, les commentaires, les substitutions "$(...)" et les chaînes qui
+// se terminent par un nom ou un chemin de shell ("C:\...\pwsh.exe", 'pwsh', $'pwsh') : le nom y compte comme un nom de shell.
+const SHELL_PATH_END = /(?:^|[\\/])(?:pwsh|powershell)(?:\.exe)?$/i;
+function shellMask(s, tool, mask) {
+  return s.replace(maskRe(tool, mask), (m) => {
+    if (m[0] === '\\' || m[0] === '`' || isComment(m)) return m;
+    const text = m[0] === '$' ? m.slice(2, -1) : m.slice(1, -1);
+    if (substitutes(m, tool) || SHELL_PATH_END.test(text)) return m;
+    return maskOf(m);
+  });
+}
+
+// Forme positionnelle : argument entre guillemets de chaque pwsh/powershell hors chaîne (SHELL_NAME_PS_POS).
+function positionalSegments(body, tool) {
+  const out = [];
+  for (const mask of masksFor(tool)) {
+    for (const m of shellMask(body, tool, mask).matchAll(SHELL_NAME_PS_POS)) {
+      PS_ARG_AT.lastIndex = m.index + m[0].length;
+      const arg = PS_ARG_AT.exec(body);
+      if (arg) out.push(...splitSegments(arg[1] !== undefined ? psDq(arg[1]) : psSq(arg[2])));
+    }
+  }
+  return out;
+}
+
 // Arguments des wrappers shell, décodés selon leur forme (voir SHELL_ARG_POSIX), en segments à examiner.
-function wrapperSegments(body) {
+function wrapperSegments(body, tool) {
   const out = [];
   for (const m of body.matchAll(SHELL_ARG_POSIX)) {
     out.push(...splitSegments(m[2] !== undefined ? m[2].replace(DQ_ESCAPE, '$1') : m[3]));
@@ -436,6 +516,7 @@ function wrapperSegments(body) {
   for (const m of body.matchAll(SHELL_ARG_PS)) {
     out.push(...splitSegments(m[2] !== undefined ? psDq(m[2]) : psSq(m[3])));
   }
+  out.push(...positionalSegments(body, tool));
   for (const m of body.matchAll(SHELL_ARG_CMD)) out.push(...splitSegments(m[2]));
   // Sans -ArgumentList, pas de Start-Process à examiner (évite la passe de jetons sur toute commande).
   return /-argumentlist/i.test(body) ? out.concat(startArgSegments(body)) : out;
@@ -443,9 +524,13 @@ function wrapperSegments(body) {
 
 // Segments à examiner : texte masqué sans corps de heredoc, plus les arguments des wrappers shell.
 // Heredoc : Bash seulement (en PowerShell, << n'ouvre pas de corps de donnée).
+// Un segment de chaque masque (MASKS) : un refus de l'un ou de l'autre suffit.
 function denySegments(cmd, tool) {
   const body = tool === 'Bash' ? stripHeredocs(cmd) : cmd;
-  return splitSegments(maskPhrases(body, tool)).concat(wrapperSegments(body));
+  const out = [];
+  for (const mask of masksFor(tool)) out.push(...splitSegments(maskPhrases(body, tool, mask)));
+  // Les masques donnent souvent les mêmes segments : chaque segment n'est examiné qu'une fois.
+  return [...new Set(out.concat(wrapperSegments(body, tool)))];
 }
 
 // Regex d'une règle, compilée une seule fois (insensible à la casse) ; invalide -> null (ignorée).
