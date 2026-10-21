@@ -1,6 +1,6 @@
 ---
 name: livraison
-description: "À charger AVANT la première modification de code ou de config : process de livraison de bout en bout, issue Linear (recherche de doublon, critères en checklist, In Progress) → branche liée à l'issue → implémentation (parallèle si les lots sont indépendants) → tests et lint locaux → PR (Fixes <ID>, plan de test) → review indépendante sur la PR par un sous-agent du graphe → CI consultée après chaque push → commentaires de la PR et de l'issue Linear traités → In Review, sans merge. Format du commentaire de review, rôle des hooks process-gate, tool-guard, deny-list, context-budget, handoff, model-check. Ne s'applique pas aux questions, lectures ou éditions triviales d'une ou deux lignes."
+description: "À charger AVANT la première modification de code ou de config : process de livraison (issue Linear sans doublon, branche, tests et lint, PR, review sur la PR, CI, retours PR et Linear, In Review, sans merge) et rôle des hooks. Pas pour une question, une lecture ou une édition d'une ou deux lignes."
 ---
 
 # Livraison
