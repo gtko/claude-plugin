@@ -1,0 +1,6 @@
+* -text
+*.ps1 -text
+*.png binary
+*.jpg binary
+*.dll binary
+*.whl binary

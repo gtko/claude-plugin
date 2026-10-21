@@ -1,0 +1,16 @@
+{
+  "name": "gtko",
+  "owner": {
+    "name": "gtko"
+  },
+  "metadata": {
+    "description": "Marketplace gtko : agents Claude du graphe gtko (Haiku d'abord)."
+  },
+  "plugins": [
+    {
+      "name": "gtko-agents",
+      "source": "./",
+      "description": "Graphe d'agents gtko (Haiku d'abord) : orchestrateurs, constructeurs, relecteur et hooks de routage."
+    }
+  ]
+}

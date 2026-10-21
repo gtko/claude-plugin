@@ -1,0 +1,64 @@
+# Secrets et authentification
+.credentials.json
+auth.json
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa*
+id_ed25519*
+.env
+.env.*
+secrets/
+.sandbox*
+# Bases de données, journaux, sessions, historiques, caches
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+*.log
+*.tmp
+*.tmp-*
+*.lock
+*.pid
+*.bak
+*.bak-*
+history.jsonl
+sessions/
+archived_sessions/
+projects/
+file-history/
+paste-cache/
+shell-snapshots/
+telemetry/
+session-env/
+debug/
+cache/
+Cache/
+logs/
+Logs/
+node_modules/
+# Sauvegardes locales de install.ps1
+*.bak-*
+# Médias lourds éventuels (à lister dans le README si ajoutés)
+*.iso
+*.zip
+*.7z
+*.mp4
+*.mkv
+
+# Archives des fonds Lively (petites, nécessaires à la restauration)
+!lively/Library/**/*.zip
+
+# Journal de routage et transcripts : jamais versionnés
+routing-log.jsonl
+*.jsonl
+
+# Worktrees et état local des agents Claude Code
+.claude/
+
+# Bytecode Python : jamais versionné (un .pyc peut embarquer des constantes, dont des secrets)
+__pycache__/
+*.pyc

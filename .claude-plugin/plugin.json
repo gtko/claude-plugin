@@ -1,0 +1,18 @@
+{
+  "name": "gtko-agents",
+  "version": "1.0.0",
+  "description": "Graphe d'agents gtko (Haiku d'abord) : orchestrateurs, constructeurs, relecteur et hooks de routage.",
+  "author": {
+    "name": "gtko"
+  },
+  "agents": [
+    "./agents/opus-advisor.md",
+    "./agents/opus-builder.md",
+    "./agents/haiku-tools.md",
+    "./agents/haiku-scout.md",
+    "./agents/haiku-builder.md",
+    "./agents/sonnet-reviewer.md",
+    "./agents/sonnet-builder.md",
+    "./agents/sonnet-lead.md"
+  ]
+}

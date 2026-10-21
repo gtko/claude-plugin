@@ -1,0 +1,52 @@
+{
+  "orchestratorModel": "sonnet",
+  "contextBudget": {
+    "_note": "Seuils absolus en tokens de contexte (entree + cache du dernier tour), fenetre reelle 1M : delegation a 200k, passation a 300k, blocage a 400k. Plafond de cout volontaire ; une chute de plus de 30 % (/clear, compactage) re-arme les niveaux.",
+    "delegateTokens": 200000,
+    "handoffTokens": 300000,
+    "blockTokens": 400000
+  },
+  "handoff": {
+    "dir": "~/.claude/handoffs",
+    "maxAgeHours": 48,
+    "maxInjectBytes": 8000
+  },
+  "toolGuard": {
+    "_denyNote": "denyCommands : regex (insensibles a la casse) sur chaque segment Bash/PowerShell. Guillemets selon l'outil (PowerShell : echappement par backtick ou doublement, guillemets typographiques compris ; Bash : backslash). Corps de heredoc retires (Bash seulement) sauf si un shell les execute ; argument entre guillemets de bash -c / powershell -Command / eval examine ; segments tronques a 16 Ko. ifCurrentBranch : la regle ne s'applique que si la branche courante du depot (git -C <dir> symbolic-ref, fail-open) est dans la liste. hint : alternative affichee. Refus absolu : ni relance, ni budget. DENY_LIST=off desactive ce seul controle ; TOOL_GUARD=off coupe tout.",
+    "denyCommands": [
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])git(?:\\.exe)?[\"']?(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--[a-z-]+(?:=\\S+)?))*\\s+push\\b(?=.*(?:^|\\s)(?:--force(?:-with-lease)?(?:=\\S*)?|-[a-zA-Z]*f[a-zA-Z]*|\\+\\S+)(?=\\s|$)).*(?<![\\w/.-])(?:refs/heads/)?(?:main|master)(?![\\w/.-])", "reason": "push force vers main ou master", "hint": "git push -u origin feature/<nom> (sans --force)" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])git(?:\\.exe)?[\"']?(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--[a-z-]+(?:=\\S+)?))*\\s+push\\b(?=.*(?:^|\\s)(?:--force(?:-with-lease)?(?:=\\S*)?|-[a-zA-Z]*f[a-zA-Z]*|\\+\\S+)(?=\\s|$))(?:(?:\\s+-\\S*)*(?:\\s+[^-\\s]\\S*)?(?:\\s+-\\S*)*$|.*\\s[\"']?\\+?[\"']?(?:HEAD|@)[\"']?(?=\\s|$))", "reason": "push force sans refspec explicite depuis main ou master (branche courante)", "hint": "git switch -c feature/<nom>, puis git push -u origin feature/<nom>", "ifCurrentBranch": ["main", "master"] },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])git(?:\\.exe)?[\"']?(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--[a-z-]+(?:=\\S+)?))*\\s+push\\b.*(?:\\s(?:--delete|-d)(?=\\s|$).*\\s(?:refs/heads/)?(?:main|master)(?=\\s|$)|\\s:(?:refs/heads/)?(?:main|master)(?=\\s|$))", "reason": "suppression de la branche main ou master sur le remote" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])git(?:\\.exe)?[\"']?(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--[a-z-]+(?:=\\S+)?))*\\s+branch\\b.*\\s-D\\s+(?:main|master)(?=\\s|$)", "reason": "suppression de la branche main ou master (git branch -D)", "hint": "git branch -d <branche> (seulement si fusionnee)" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])git(?:\\.exe)?[\"']?(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--[a-z-]+(?:=\\S+)?))*\\s+reset\\b(?=.*\\s--hard(?=\\s|$))(?=.*[\\s/]origin/(?:main|master)(?![\\w/.-]))", "reason": "reset --hard vers origin/main ou origin/master", "hint": "git pull --ff-only" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])git(?:\\.exe)?[\"']?(?:\\s+(?:-[Cc]\\s+(?:\"[^\"]*\"|'[^']*'|\\S+)|--[a-z-]+(?:=\\S+)?))*\\s+clean\\b(?=.*\\s(?:-[a-zA-Z]*f[a-zA-Z]*|--force)(?=\\s|$))(?=.*\\s-[a-zA-Z]*d[a-zA-Z]*(?=\\s|$))(?=.*\\s-[a-zA-Z]*x[a-zA-Z]*(?=\\s|$))(?!.*(?<!-e|--exclude)\\s(?!-)\\S)", "reason": "git clean -fdx sans chemin explicite", "hint": "git clean -n pour voir, puis git clean -fd -- <chemin>" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])rm(?:\\.exe)?[\"']?(?=\\s)(?=.*\\s(?:-(?!force(?=\\s|$))[a-zA-Z]*r[a-zA-Z]*|--recursive)(?=\\s|$))(?=.*\\s(?:-[a-zA-Z]*f[a-zA-Z]*|--force)(?=\\s|$))(?=.*\\s[\"']?(?:/\\*?|~(?:[\\\\/]\\*?)?|\\$\\{?HOME\\}?(?:[\\\\/]\\*?)?|(?:C:|/c)(?:[\\\\/](?:Users)?)?[\\\\/]?\\*?|\\.{1,2}[\\\\/]?|\\*)[\"']?(?=\\s|$))", "reason": "rm -rf sur une racine (/, ~, $HOME, lecteur C:, /c, /c/Users, ., .., *)", "hint": "supprimer un chemin precis, ex. rm -rf ./dossier" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])(?:remove-item|ri|del|erase|rd|rmdir)(?=\\s)(?=.*\\s(?:-r(?:ecurse)?|/s)(?=\\s|$))(?=.*\\s[\"']?(?:/\\*?|~(?:[\\\\/]\\*?)?|\\$\\{?HOME\\}?(?:[\\\\/]\\*?)?|(?:C:|/c)(?:[\\\\/](?:Users)?)?[\\\\/]?\\*?|\\.{1,2}[\\\\/]?|\\*)[\"']?(?=\\s|$))", "reason": "suppression recursive (Remove-Item -Recurse, rd /s, del /s) d'une racine", "hint": "Remove-Item -Recurse <chemin precis>" },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])wrangler(?:\\.exe)?[\"']?(?:@\\S+)?(?=\\s)(?:(?!\\bkv\\s+key\\b|\\br2\\s+object\\b|\\bexecute\\b).)*\\sdelete(?=\\s|$)", "reason": "suppression Cloudflare (wrangler delete, d1, kv namespace, r2 bucket, queues, secret)", "_note": "wrangler kv key delete, wrangler r2 object delete et wrangler d1 execute sont volontairement exclus (opérations de données courantes) : le lookahead du motif les laisse passer." },
+      { "pattern": "(?:^|[\\s(`/\\\\\"'])gh(?:\\.exe)?[\"']?\\s+(?:repo|release)\\s+delete\\b", "reason": "suppression GitHub (gh repo delete, gh release delete)" }
+    ],
+    "repeatLimit": 3,
+    "repeatWindow": 15,
+    "budgets": { "haiku-builder": 60, "haiku-scout": 40, "haiku-tools": 40, "haiku": 40, "sonnet": 60, "opus": 60, "default": 60 },
+    "budgetGrace": 6,
+    "budgetWarnAt": 0.8,
+    "readMaxLines": { "main": 300, "opus": 300, "sonnet": 500, "haiku": 800, "default": 500 },
+    "rangeMaxLines": 400,
+    "sizeCheckBytes": 20000
+  },
+  "stateDir": "~/.claude/hook-state",
+  "stateMaxAgeHours": 48,
+  "processGate": {
+    "_note": "Process de livraison (ODY-128). deployPatterns : regex insensibles a la casse, testees sur la commande. excludeRepos : toplevel git exact du dossier effectif (casse et separateurs ignores) ou aucun controle ne s'applique. LINEAR_API_KEY (env) active la verification d'issue Linear ; sans cle, ce controle est saute.",
+    "enabled": true,
+    "issueKeyPattern": "ody-\\d+",
+    "deployPatterns": ["wrangler deploy\\b", "deploy:worker\\b"],
+    "linearCacheTtlMinutes": 60,
+    "excludeRepos": ["C:/Users/grego/Projets/laststream"],
+    "fastLane": {
+      "enabled": true,
+      "maxLines": 30,
+      "sensitivePaths": ["(^|/)hooks/", "(^|/)settings[^/]*\\.json$", "(^|/)\\.env", "secret", "auth", "deploy", "(^|/)wrangler\\.(toml|jsonc?)$", "(^|/)\\.github/workflows/", "(^|/)agents/", "(^|/)CLAUDE\\.md$", "(^|/)skills/livraison/", "(^|/)package\\.json$", "(^|/)\\.npmrc$"]
+    }
+  }
+}

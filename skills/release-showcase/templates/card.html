@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Highlight card</title>
+<!--
+  Carte d'illustration d'un point fort de release, 1200 x 675 (16:9). Rendu par scripts/render.cjs avec 1200 675 2.
+  Paramètres (query string ?clé=valeur, ou ?json=<objet JSON encodé>) :
+    index        numéro affiché, ex. 01
+    kicker       libellé en capitales au-dessus du titre (ex. Living wallpaper)
+    title        titre du point fort (court)
+    body         2 ou 3 lignes maximum
+    tags         liste JSON ou texte séparé par | (pastilles)
+    layout       split (défaut, visuel à droite) ou stack (titre au-dessus, visuel pleine largeur)
+    visual       image | lanes | steps | shield
+      image      capture d'écran encadrée : image (chemin local, URL ou data: URI), fit = cover (défaut) | contain
+      lanes      file de tâches : slots = "run,run,idle,refused" ; slotsTitle ; slotsNote
+      steps      liste numérotée : steps = liste JSON ou texte séparé par |
+      shield     bouclier + contrôles : items = liste JSON ou texte séparé par |, shieldTitle
+    accent       couleur principale (défaut #f28c28)
+-->
+<style>
+  :root {
+    --night: #141826;
+    --night-2: #1d2440;
+    --orange: #f28c28;
+    --blue: #3b5ba5;
+    --red: #c0392b;
+    --cream: #f3e9d2;
+    --accent: #f28c28;
+    --accent2: #3b5ba5;
+    --ink: #f3e9d2;
+    --muted: rgba(243, 233, 210, 0.74);
+    --panel: #0c1020;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--night); }
+  body {
+    position: relative;
+    width: 1200px;
+    height: 675px;
+    overflow: hidden;
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+  .bg {
+    position: absolute; inset: 0;
+    background:
+      radial-gradient(560px 380px at 100% 100%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 70%),
+      radial-gradient(640px 460px at 0% 0%, color-mix(in srgb, var(--accent2) 42%, transparent), transparent 70%),
+      linear-gradient(168deg, var(--night-2) 0%, var(--night) 60%, #0c1020 100%);
+  }
+  .grain {
+    position: absolute; inset: 0; opacity: 0.22; mix-blend-mode: soft-light; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  .wrap {
+    position: absolute; inset: 0; padding: 66px 64px;
+    display: grid; grid-template-columns: 450px minmax(0, 1fr); gap: 56px; align-items: center;
+  }
+  .text { min-width: 0; }
+  .index {
+    font: 700 22px/1 var(--mono); color: var(--accent); letter-spacing: 0.06em;
+  }
+  .kicker {
+    margin-top: 16px; font: 700 17px/1 var(--sans); letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted);
+  }
+  h1 {
+    margin: 18px 0 0; font-size: 50px; line-height: 1.06; font-weight: 800; letter-spacing: -0.03em;
+  }
+  .body {
+    margin: 22px 0 0; font-size: 24px; line-height: 1.45; color: var(--muted);
+  }
+  .tags { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0 0; padding: 0; list-style: none; }
+  .tags li {
+    font: 600 16px/1 var(--mono); padding: 9px 13px 8px; border-radius: 999px;
+    color: var(--cream); background: rgba(243, 233, 210, 0.07); border: 1px solid rgba(243, 233, 210, 0.18);
+  }
+
+  .visual { min-width: 0; min-height: 0; }
+  .win {
+    margin: 0; border-radius: 18px; overflow: hidden; background: var(--panel);
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(243, 233, 210, 0.14);
+  }
+  .win .bar {
+    height: 34px; display: flex; align-items: center; gap: 9px; padding: 0 15px;
+    background: #1a2140; border-bottom: 1px solid rgba(243, 233, 210, 0.08);
+  }
+  .win .bar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .win .bar i:nth-child(1) { background: var(--red); }
+  .win .bar i:nth-child(2) { background: var(--accent); }
+  .win .bar i:nth-child(3) { background: var(--cream); opacity: 0.8; }
+  .win img { display: block; width: 100%; height: 500px; }
+  .win img.cover { object-fit: cover; object-position: top center; }
+  .win img.contain { object-fit: contain; background: #0b0f1d; }
+  body.stack .win img { height: 360px; }
+  body.stack .win img.contain { height: auto; }
+  body.stack .wrap {
+    display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch;
+    gap: 26px; padding-top: 56px;
+  }
+  body.stack .visual { flex: none; }
+
+  .panel {
+    background: var(--panel); border-radius: 18px; padding: 30px 34px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(243, 233, 210, 0.14);
+  }
+  .panel h2 {
+    margin: 0 0 22px; font: 700 17px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted);
+  }
+
+  .lane {
+    height: 60px; border-radius: 12px; margin-bottom: 14px; padding: 0 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    font: 700 18px/1 var(--mono);
+  }
+  .lane.run {
+    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 62%, #ffd39a));
+    color: #1a1208; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+  .lane.idle { border: 1.5px dashed rgba(243, 233, 210, 0.26); color: var(--muted); }
+  .lane.refused { background: rgba(192, 57, 43, 0.18); border: 1.5px solid #d9584a; color: #ff9c90; }
+  .lane .st { font-weight: 600; opacity: 0.78; }
+  .panel .note {
+    margin: 20px 0 0; font: 500 17px/1.4 var(--mono); color: var(--muted);
+  }
+
+  .steps { list-style: none; margin: 0; padding: 0; position: relative; }
+  .steps li {
+    position: relative; display: flex; align-items: center; gap: 18px; height: 46px;
+    font-size: 23px; font-weight: 600; color: var(--cream);
+  }
+  .steps li:not(:last-child)::after {
+    content: ""; position: absolute; left: 15px; top: 34px; height: 24px; width: 2px;
+    background: color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .steps .n {
+    width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center;
+    font: 700 14px/1 var(--mono); color: #1a1208; background: var(--accent);
+    box-shadow: 0 0 16px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .steps li.last .n { background: transparent; color: var(--accent); border: 2px solid var(--accent); box-shadow: none; font-size: 18px; }
+
+  .shield svg {
+    display: block; width: 104px; height: 104px; margin: 0 0 18px;
+    filter: drop-shadow(0 0 22px color-mix(in srgb, var(--accent) 50%, transparent));
+  }
+  .checks { list-style: none; margin: 0; padding: 0; }
+  .checks li {
+    display: flex; align-items: center; gap: 16px; min-height: 58px;
+    font-size: 22px; font-weight: 600; color: var(--cream);
+    border-bottom: 1px solid rgba(243, 233, 210, 0.08);
+  }
+  .checks li:last-child { border-bottom: 0; }
+  .checks .ck {
+    width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent); color: #1a1208; font: 800 16px/1 var(--sans);
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grain"></div>
+
+  <div class="wrap" id="wrap">
+    <section class="text">
+      <div class="index" id="index"></div>
+      <div class="kicker" id="kicker"></div>
+      <h1 id="title"></h1>
+      <p class="body" id="body"></p>
+      <ul class="tags" id="tags"></ul>
+    </section>
+    <section class="visual" id="visual"></section>
+  </div>
+
+<script>
+(function () {
+  function readParams() {
+    var q = new URLSearchParams(window.location.search);
+    var d = {};
+    var json = q.get('json');
+    if (json) { try { d = JSON.parse(json); } catch (e) { d = {}; } }
+    q.forEach(function (v, k) { if (k !== 'json') d[k] = v; });
+    return d;
+  }
+  // Listes : tableau JSON, ou texte séparé par | (défaut) ; sep ',' pour les états des voies.
+  function toList(v, sep) {
+    if (Array.isArray(v)) return v.map(String);
+    if (typeof v === 'string') return v.split(sep || '|').map(function (s) { return s.trim(); }).filter(Boolean);
+    return [];
+  }
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  var p = readParams();
+  var $ = function (id) { return document.getElementById(id); };
+
+  if (p.accent) document.documentElement.style.setProperty('--accent', p.accent);
+  if (p.accent2) document.documentElement.style.setProperty('--accent2', p.accent2);
+  if (p.layout === 'stack') document.body.classList.add('stack');
+
+  $('index').textContent = p.index || '';
+  if (!p.index) $('index').classList.add('hidden');
+  $('kicker').textContent = p.kicker || '';
+  if (!p.kicker) $('kicker').classList.add('hidden');
+  $('title').textContent = p.title || '';
+  $('body').textContent = p.body || '';
+  if (!p.body) $('body').classList.add('hidden');
+
+  var tags = toList(p.tags);
+  tags.forEach(function (t) { $('tags').appendChild(el('li', '', t)); });
+  if (!tags.length) $('tags').classList.add('hidden');
+
+  var visual = $('visual');
+  var kind = p.visual || 'image';
+  var pending = [];
+
+  if (kind === 'image') {
+    var fig = el('figure', 'win');
+    var bar = el('div', 'bar');
+    bar.appendChild(el('i')); bar.appendChild(el('i')); bar.appendChild(el('i'));
+    fig.appendChild(bar);
+    var img = el('img');
+    img.alt = p.alt || '';
+    img.className = p.fit === 'contain' ? 'contain' : 'cover';
+    if (p.image) img.src = p.image;
+    fig.appendChild(img);
+    visual.appendChild(fig);
+    pending.push(new Promise(function (res) {
+      if (img.complete && img.naturalWidth > 0) return res();
+      img.onload = res; img.onerror = res;
+    }));
+  } else if (kind === 'lanes') {
+    var panel = el('div', 'panel');
+    panel.appendChild(el('h2', '', p.slotsTitle || 'Running now'));
+    toList(p.slots, ',').forEach(function (s) {
+      // Une voie : "état" ou "état:commande", état = run | idle | refused.
+      var parts = s.split(':');
+      var state = ['run', 'idle', 'refused'].indexOf(parts[0]) >= 0 ? parts[0] : 'idle';
+      var lane = el('div', 'lane ' + state);
+      lane.appendChild(el('span', 'cmd', parts.slice(1).join(':')));
+      lane.appendChild(el('span', 'st', { run: 'running', idle: 'idle', refused: 'refused' }[state]));
+      panel.appendChild(lane);
+    });
+    if (p.slotsNote) panel.appendChild(el('p', 'note', p.slotsNote));
+    visual.appendChild(panel);
+  } else if (kind === 'steps') {
+    var list = toList(p.steps);
+    var ol = el('ol', 'panel steps');
+    ol.style.padding = '30px 40px';
+    ol.style.listStyle = 'none';
+    list.forEach(function (name, i) {
+      var li = el('li', i === list.length - 1 ? 'last' : '');
+      li.appendChild(el('span', 'n', i === list.length - 1 ? '✓' : String(i + 1)));
+      li.appendChild(el('span', '', name));
+      ol.appendChild(li);
+    });
+    visual.appendChild(ol);
+  } else if (kind === 'shield') {
+    var sh = el('div', 'panel shield');
+    sh.innerHTML = '<svg viewBox="0 0 120 120" aria-hidden="true"><path d="M60 7 L104 23 V58 C104 86 86 104 60 114 C34 104 16 86 16 58 V23 Z" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linejoin="round"/><path d="M42 61 L55 74 L79 47" fill="none" stroke="var(--accent)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    if (p.shieldTitle) sh.appendChild(el('h2', '', p.shieldTitle));
+    var ul = el('ul', 'checks');
+    toList(p.items).forEach(function (t) {
+      var li = el('li');
+      li.appendChild(el('span', 'ck', '✓'));
+      li.appendChild(el('span', '', t));
+      ul.appendChild(li);
+    });
+    sh.appendChild(ul);
+    visual.appendChild(sh);
+  }
+
+  Promise.all(pending).then(function () { document.body.dataset.ready = '1'; });
+  if (!pending.length) document.body.dataset.ready = '1';
+})();
+</script>
+</body>
+</html>
