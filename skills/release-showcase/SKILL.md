@@ -1,6 +1,6 @@
 ---
 name: release-showcase
-description: Produit une release GitHub soignée, avec bannière 1280x640, une illustration par point fort et des notes rédigées, appliquées avec gh release edit. À utiliser quand l'utilisateur demande « fais une jolie release », « release notes avec bannière », « illustre la release », « release showcase », ou après la création d'un tag, pour remplacer les notes auto-générées (« What's Changed ») par de vraies notes.
+description: Produit une release GitHub soignée (bannière, illustrations, notes rédigées) via gh release edit. Pour « fais une jolie release », « release notes avec bannière », ou après un tag.
 ---
 
 # Release showcase

@@ -102,7 +102,6 @@ flowchart LR
 | `sonnet-builder` | Sonnet | medium | Escalade (`ESCALADE:`) ou usage direct justifié (`DIRECT:`) | oui |
 | `sonnet-lead` | Sonnet | medium | Second orchestrateur des gros chantiers (`LEAD:`) | oui |
 | `fr-reviewer` | Sonnet | medium | Review de code, rapports en français | non |
-| `implementer` | Sonnet | medium | Implémentation d'un plan existant | non |
 | `linear-planner` | Sonnet | medium | Découpage d'une demande en sous-tâches Linear | non |
 
 ## Config complète : dépôt gtko/config

@@ -1,6 +1,6 @@
 ---
 name: haiku-tools
-description: Proxy d'outils (Haiku, rapide). Use PROACTIVELY pour exécuter à la place d'un agent Sonnet/Opus les appels d'outils coûteux en contexte - recherches larges (grep/glob), lecture de longs fichiers ou logs, commandes CLI (git, gh, npm, wrangler...), lancement de tests/CI/build, éditions mécaniques répétitives. Rend un résultat compact.
+description: Proxy d'outils (Haiku). Use PROACTIVELY à la place d'un agent Sonnet/Opus pour les recherches larges, lectures de longs fichiers ou logs, commandes CLI, tests, CI, build et éditions mécaniques ; rend un résultat compact.
 disallowedTools: Agent
 model: haiku
 effort: medium

@@ -8,7 +8,7 @@ const { configDir } = require('./lib/paths.js');
 const { bare, foreignNamespace } = require('./lib/agent-name.js');
 
 const UTILITY = ['Explore', 'Plan', 'claude-code-guide', 'statusline-setup', 'fr-reviewer', 'linear-planner'];
-const KNOWN_FIXED_MODEL = ['haiku-scout', 'haiku-builder', 'sonnet-reviewer', 'sonnet-builder', 'sonnet-lead', 'implementer', 'opus-advisor', 'opus-builder', 'haiku-tools'];
+const KNOWN_FIXED_MODEL = ['haiku-scout', 'haiku-builder', 'sonnet-reviewer', 'sonnet-builder', 'sonnet-lead', 'opus-advisor', 'opus-builder', 'haiku-tools'];
 const HAIKU_ONLY = ['haiku-scout', 'haiku-builder', 'haiku-tools'];
 // Sous-agents Sonnet/Opus autorises a deleguer leurs appels d'outils a haiku-tools (et a rien d'autre).
 const TOOL_DELEGATORS = ['sonnet-builder', 'sonnet-reviewer', 'opus-advisor', 'opus-builder'];
