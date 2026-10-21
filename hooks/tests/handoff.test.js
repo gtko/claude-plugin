@@ -23,8 +23,8 @@ after(() => {
 
 const HOOK = path.join(__dirname, '..', 'handoff.js');
 const HOUR = 3600 * 1000;
-const CWD = 'C:\\Users\\grego\\Projets\\laststream';
-const SLUG = 'c-users-grego-projets-laststream';
+const CWD = 'C:\\dev\\app';
+const SLUG = 'c-dev-app';
 
 function tmpRoot() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));

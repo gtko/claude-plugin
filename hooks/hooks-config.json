@@ -41,13 +41,13 @@
   "stateDir": "~/.claude/hook-state",
   "stateMaxAgeHours": 48,
   "processGate": {
-    "_note": "Process de livraison (ODY-128). deployPatterns : regex insensibles a la casse, testees sur la commande. excludeRepos : toplevel git exact du dossier effectif (casse et separateurs ignores) ou aucun controle ne s'applique. LINEAR_API_KEY (env) active la verification d'issue Linear ; sans cle, ce controle est saute. issueKeyPattern : identifiant d'issue Linear au debut du nom de branche ou d'un segment (BENCH-41-x, feature/mvp-42-x). agentMerge : false = gh pr merge et gh api .../merge refuses a l'agent, un humain merge ; true seulement en surcharge locale (hooks-config.local.json, fusion de premier niveau : recopier tout le bloc processGate), et alors pour tous les depots.",
+    "_note": "Process de livraison. deployPatterns : regex insensibles a la casse, testees sur la commande. excludeRepos : toplevel git exact du dossier effectif (casse et separateurs ignores) ou aucun controle ne s'applique. LINEAR_API_KEY (env) active la verification d'issue Linear ; sans cle, ce controle est saute. issueKeyPattern : identifiant d'issue Linear au debut du nom de branche ou d'un segment (BENCH-41-x, feature/mvp-42-x). agentMerge : false = gh pr merge et gh api .../merge refuses a l'agent, un humain merge ; true seulement en surcharge locale (hooks-config.local.json, fusion de premier niveau : recopier tout le bloc processGate), et alors pour tous les depots.",
     "enabled": true,
     "issueKeyPattern": "(?<=^|/)[a-z][a-z0-9]{0,9}-\\d+(?=[-_/.]|$)",
     "agentMerge": false,
     "deployPatterns": ["wrangler deploy\\b", "deploy:worker\\b"],
     "linearCacheTtlMinutes": 60,
-    "excludeRepos": ["C:/Users/grego/Projets/laststream"],
+    "excludeRepos": [],
     "fastLane": {
       "enabled": true,
       "maxLines": 30,

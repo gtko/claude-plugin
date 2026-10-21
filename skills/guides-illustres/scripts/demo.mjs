@@ -1,6 +1,6 @@
 // Démo du kit de capture : sert une page locale, joue un scénario en headless, produit les sorties dans demo-out/
 // et contrôle chaque fichier produit (dimensions, poids, durée, absence d'audio, temps morts retirés).
-// Usage : node demo.mjs   (variable PLAYWRIGHT_PATH : chemin ou URL de playwright/index.mjs ; défaut : laststream-app)
+// Usage : PLAYWRIGHT_PATH=<chemin ou URL de playwright/index.mjs> node demo.mjs (variable obligatoire, aucun défaut)
 // Code de sortie 0 si tout est conforme, 1 sinon. Les sorties restent dans demo-out/ (à supprimer à la main).
 import { createServer } from 'node:http';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs';
@@ -15,7 +15,6 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const OUT = join(here, 'demo-out');
-const DEFAULT_PLAYWRIGHT = 'C:/Users/grego/Projets/laststream/laststream-app/node_modules/playwright/index.mjs';
 const MAX_IMG_BYTES = 250_000;
 const MAX_CLIP_SEC = 20;
 // Hôte fictif (domaine .invalid) : jamais résolu, donc aucun trafic réel même si le garde réseau laissait passer.
@@ -87,7 +86,8 @@ const PAGE = `<!doctype html>
 
 /** Importe Playwright depuis PLAYWRIGHT_PATH (chemin ou URL file:) : le kit ne dépend pas de Playwright. */
 async function loadChromium() {
-  const raw = process.env.PLAYWRIGHT_PATH || DEFAULT_PLAYWRIGHT;
+  const raw = process.env.PLAYWRIGHT_PATH;
+  if (!raw) throw new Error("PLAYWRIGHT_PATH non défini : indique node_modules/playwright/index.mjs d'un projet");
   if (!raw.startsWith('file:') && !existsSync(resolve(raw))) {
     throw new Error(`Playwright introuvable (${raw}) : définis PLAYWRIGHT_PATH vers node_modules/playwright/index.mjs d'un projet`);
   }

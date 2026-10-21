@@ -1,5 +1,5 @@
 'use strict';
-// ODY-135 : compactage guide. Seuils context-budget (une annonce, un blocage, un avertissement),
+// ABC-135 : compactage guide. Seuils context-budget (une annonce, un blocage, un avertissement),
 // ligne /compact, rappel [Routage] une fois par session, pre-compact (passation, bloc, jamais bloquant).
 const test = require('node:test');
 const assert = require('node:assert');
@@ -14,7 +14,7 @@ const { refreshPassation } = require('../pre-compact.js');
 const ROUTER = path.join(__dirname, '..', 'model-router.js');
 const HANDOFF = path.join(__dirname, '..', 'handoff.js');
 const PRECOMPACT = path.join(__dirname, '..', 'pre-compact.js');
-const CWD = 'C:\\Users\\grego\\Projets\\laststream';
+const CWD = 'C:\\dev\\app';
 const GENERIC = '/compact garde : issue en cours, branche et worktree, décisions, reste à faire, agents en cours';
 const RAPPEL = '[Routage] Delegue selon CLAUDE.md (haiku-builder par defaut, gtko-agents:haiku-builder en mode plugin), parallelise au maximum (lots independants dans le meme message) ; plan/decision/review -> opus-advisor (gtko-agents:opus-advisor en mode plugin) ; modification de code -> skill livraison (gtko-agents:livraison en mode plugin), charge AVANT la premiere edition : issue Linear reprise ou creee puis In Progress, branche liee, tests et lint, review par un sous-agent, PR Fixes <ID>, CI verifiee apres chaque push par un gh pr checks dans un appel separe (jamais dans la meme commande ni le meme lot que le push), un refus de hook ne stoppe pas le process (appliquer son alternative), commentaires PR et Linear traites, In Review, jamais de merge.';
 
@@ -166,14 +166,14 @@ const PASSATION = [
   '- ne pas bloquer au PreCompact',
   '',
   '## Tâche',
-  'Migrer les hooks vers le compactage guidé (ODY-135) : lot 2.',
+  'Migrer les hooks vers le compactage guidé (ABC-135) : lot 2.',
   'Détail secondaire ignoré.',
   '',
   '## Issue Linear',
-  'ODY-135',
+  'ABC-135',
   '',
   '## Branche/worktree',
-  'feature/ody-135-compactage-guide (config-ody-135)',
+  'feature/abc-135-compactage-guide (config-abc-135)',
   '',
   '## Reste à faire (étapes concrètes)',
   '1. Écrire pre-compact.js',
@@ -188,8 +188,8 @@ const PASSATION = [
 
 test('compactLine : tache, issue, branche et reste depuis une passation, sur une ligne, bloc precompact ignore', () => {
   const line = compactLine(PASSATION);
-  assert.ok(line.startsWith('/compact garde : Tâche : Migrer les hooks vers le compactage guidé (ODY-135) : lot 2.'), line);
-  assert.ok(line.endsWith(' ; Issue : ODY-135 ; Branche : feature/ody-135-compactage-guide (config-ody-135) ; Reste : Écrire pre-compact.js ; Tests du routeur ; Mettre à jour SKILL.md'), line);
+  assert.ok(line.startsWith('/compact garde : Tâche : Migrer les hooks vers le compactage guidé (ABC-135) : lot 2.'), line);
+  assert.ok(line.endsWith(' ; Issue : ABC-135 ; Branche : feature/abc-135-compactage-guide (config-abc-135) ; Reste : Écrire pre-compact.js ; Tests du routeur ; Mettre à jour SKILL.md'), line);
   assert.ok(!line.includes('\n'));
   assert.ok(!line.includes('Détail secondaire'));
   assert.ok(!line.includes('ne pas bloquer'));

@@ -1,8 +1,8 @@
-// PreToolUse (matcher Bash|PowerShell) : garde-fou du process de livraison (ODY-128).
+// PreToolUse (matcher Bash|PowerShell) : garde-fou du process de livraison (ABC-128).
 // Refuse git commit / gh pr create / gh pr merge / deploiement qui sortent du process :
 // branche sans cle d'issue (ou main/master), issue Linear inexistante, PR sans cle d'issue,
 // merge par l'agent sans processGate.agentMerge (merge reserve a l'humain),
-// review 4 axes absente ou perimee (ou review rapide, voie rapide ODY-130 : petit diff hors chemins sensibles),
+// review 4 axes absente ou perimee (ou review rapide, voie rapide ABC-130 : petit diff hors chemins sensibles),
 // checks en echec, deploiement hors main a jour.
 // Ne reagit qu'aux commandes concernees : le reste passe sans aucun appel externe.
 // Dossier effectif : replay des cd / Set-Location / pushd precedant la commande, sous-shells (...) compris
@@ -71,7 +71,7 @@ const DRY_RUN_RE = /(?:^|\s)--dry-run(?=\s|$)/;
 // groupe 2 : verbe, groupe 3 : reste de la piece.
 const CD_PIECE_RE = /^(\s*(?:\{\s*|!\s+|(?:then|do|else|elif)\s+)*)(cd|set-location|sl|pushd|push-location|popd|pop-location)(?![\w-])([\s\S]*)$/i;
 // Fin de morceau conditionnelle : then, do, else ou elif suivi seulement d'espaces, `{`, `!` ou `(`. Testee sur le
-// morceau seul (le mot-cle precedent est maintenu pendant la passe, ODY-162) : jamais sur le prefixe depuis 0.
+// morceau seul (le mot-cle precedent est maintenu pendant la passe, ABC-162) : jamais sur le prefixe depuis 0.
 const BLOCK_TAIL_RE = /(?<![\w-])(?:then|do|else|elif)(?![\w-])[\s{!(]*$/i;
 const BLOCK_CHARS_RE = /^[\s{!(]*$/;
 // Mots-cles de bloc Bash en tete de morceau (apres { ! then do else elif) : groupe 1 ouvrant (+1), groupe 2 fermant (-1).
@@ -120,7 +120,7 @@ function keysIn(text, pattern) {
   return (String(text).match(new RegExp(pattern, 'gi')) || []).filter(Boolean).map((k) => k.toUpperCase());
 }
 
-// La cle exacte `key` citee dans un texte (ODY-1280 ne cite pas ODY-128).
+// La cle exacte `key` citee dans un texte (ABC-1280 ne cite pas ABC-128).
 function citesKey(text, key) {
   const k = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp('(?<![a-z0-9])' + k + '(?!\\d)', 'i').test(String(text));
@@ -171,7 +171,7 @@ function resolvePath(base, raw) {
 }
 
 // Dossier effectif a la position `index` : replay, dans l'ordre, des changements de dossier precedents, en une seule
-// passe sur les morceaux (ODY-161, ODY-162). Etat maintenu : pile de sous-shells (chaque `(` sauvegarde l'etat, chaque
+// passe sur les morceaux (ABC-161, ABC-162). Etat maintenu : pile de sous-shells (chaque `(` sauvegarde l'etat, chaque
 // `)` le restaure, donc un cd ne deborde pas de sa parenthese), pile pushd / popd, profondeur des blocs Bash (if, while,
 // until, for, case, select ... fi, done, esac), accolades ouvertes (`if (...) {`, `try {` : bloc conditionnel ; `{` en
 // tete de commande : groupe), mot-cle du morceau precedent (then, do, else, elif) et chaine && / || en cours.
@@ -636,7 +636,7 @@ async function checkPrMerge(c) {
   const lastCommit = lastCommitTime(pr.commits);
   const comments = Array.isArray(pr.comments) ? pr.comments : [];
   if (!isFreshReview(latestReview(comments), lastCommit)) {
-    // Voie rapide (ODY-130) : review rapide fraiche + petit diff hors chemins sensibles. Sinon refus.
+    // Voie rapide (ABC-130) : review rapide fraiche + petit diff hors chemins sensibles. Sinon refus.
     const fast = c.pg.fastLane;
     if (fast.enabled !== true) return REVIEW_MISSING;
     // Eligibilite d'abord (taille, chemins de la vue, renommages via gh api) : un diff non eligible est refuse avec sa raison.

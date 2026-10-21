@@ -1,4 +1,4 @@
-// Dispatcher des hooks Claude Code (ODY-131) : un seul processus node par evenement.
+// Dispatcher des hooks Claude Code (ABC-131) : un seul processus node par evenement.
 // Usage : node dispatch.js <Evenement>   (stdin = entree JSON du hook, lue une seule fois)
 // Execute par require, dans l'ordre de HOOKS, les hooks de l'evenement. matcher = regex ancree sur tool_name.
 // - Premier refus (exit 2, decision "block", permissionDecision "deny") : sa sortie est restituee telle quelle, les suivants ne tournent pas.

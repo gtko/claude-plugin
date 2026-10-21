@@ -18,14 +18,14 @@ const REVIEW_AT = '2026-10-20T11:00:00Z';
 const OLD_REVIEW_AT = '2026-10-20T09:00:00Z';
 
 const ON_BRANCH = (name) => ({ 'git branch --show-current': { status: 0, stdout: name + '\n' } });
-const FEATURE = ON_BRANCH('feature/ody-128-process-gate');
+const FEATURE = ON_BRANCH('feature/abc-128-process-gate');
 const MAIN_SYNCED = {
   ...ON_BRANCH('main'),
   'git fetch': { status: 0, stdout: '' },
   'git rev-parse HEAD': { status: 0, stdout: 'aaa1111\n' },
   'git rev-parse origin/main': { status: 0, stdout: 'aaa1111\n' },
 };
-const LINEAR_OK = { data: { issue: { identifier: 'ODY-128' } } };
+const LINEAR_OK = { data: { issue: { identifier: 'ABC-128' } } };
 const LINEAR_MISSING = { data: { issue: null } };
 const LINEAR_NOT_FOUND = { errors: [{ message: 'Entity not found: Issue' }] };
 const LINEAR_AUTH = { errors: [{ message: 'Authentication required' }] };
@@ -74,7 +74,7 @@ const noCalls = (d) => assert.strictEqual(d.runCalls.length + d.linearCalls.leng
 
 const prView = (comments, commitDate = COMMIT_AT) => ({
   status: 0,
-  stdout: JSON.stringify({ commits: [{ oid: 'abc', committedDate: commitDate }], comments, headRefName: 'feature/ody-128-process-gate' }),
+  stdout: JSON.stringify({ commits: [{ oid: 'abc', committedDate: commitDate }], comments, headRefName: 'feature/abc-128-process-gate' }),
 });
 const prChecks = (list) => ({ status: 0, stdout: JSON.stringify(list) });
 const REVIEW_OK = [
@@ -120,7 +120,7 @@ test('git commit sur main ou master : refus (Bash et PowerShell)', async (t) => 
   for (const branch of ['main', 'master']) {
     for (const tool of ['Bash', 'PowerShell']) {
       const d = fakeDeps({ runs: ON_BRANCH(branch) });
-      const r = await decide(shell('git commit -m "ody-128 x"', tool), cfgFor(t), d);
+      const r = await decide(shell('git commit -m "abc-128 x"', tool), cfgFor(t), d);
       assert.match(r, /branche qui porte son identifiant/, branch + ' ' + tool);
       assert.match(r, /crée l'issue Linear/);
       assert.strictEqual(d.linearCalls.length, 0);
@@ -145,11 +145,11 @@ test('git commit sur branche avec clé, sans LINEAR_API_KEY : passe sans appel L
   }
 });
 
-test('git commit : issue trouvée dans Linear : passe, requête issue(id: "ODY-128")', async (t) => {
+test('git commit : issue trouvée dans Linear : passe, requête issue(id: "ABC-128")', async (t) => {
   const d = fakeDeps({ runs: FEATURE, linear: LINEAR_OK });
   assert.strictEqual(await decide(shell('git commit -m "x"'), cfgFor(t), d), null);
   assert.strictEqual(d.linearCalls.length, 1);
-  assert.match(d.linearCalls[0].query, /issue\(id: "ODY-128"\) \{ identifier \}/);
+  assert.match(d.linearCalls[0].query, /issue\(id: "ABC-128"\) \{ identifier \}/);
   assert.strictEqual(d.linearCalls[0].apiKey, KEY);
 });
 
@@ -187,7 +187,7 @@ test('cache Linear : une requête par TTL, nouvelle vérification après expirat
   d.clock.t += 31 * MIN;
   assert.strictEqual(await decide(cmd, cfg, d), null);
   assert.strictEqual(d.linearCalls.length, 2, 'TTL expiré : nouvel appel');
-  const content = fs.readFileSync(path.join(cfg.stateDir, 'process-gate-linear-ODY-128.json'), 'utf8');
+  const content = fs.readFileSync(path.join(cfg.stateDir, 'process-gate-linear-ABC-128.json'), 'utf8');
   assert.ok(!content.includes(KEY), 'la clé API ne doit pas être écrite dans le cache');
 });
 
@@ -210,44 +210,44 @@ test('git -C <dossier> commit : la branche est lue dans ce dossier', async (t) =
 test('gh pr create : clé absente de --title et --body : refus', async (t) => {
   const d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
   const r = await decide(shell('gh pr create --title "Ajoute le gate" --body "texte"'), cfgFor(t), d);
-  assert.match(r, /doit citer ODY-128 : mets la clé dans --title/);
+  assert.match(r, /doit citer ABC-128 : mets la clé dans --title/);
 });
 
 test('gh pr create : clé seulement hors de --title/--body (autre option, autre commande) : refus', async (t) => {
   for (const cmd of [
-    'gh pr create --title "rien" --body-file ody-128.md',
-    'git checkout -b ody-128-x && gh pr create --title "rien"',
+    'gh pr create --title "rien" --body-file abc-128.md',
+    'git checkout -b abc-128-x && gh pr create --title "rien"',
   ]) {
     const d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
-    assert.match(await decide(shell(cmd), cfgFor(t), d), /citer ODY-128/, cmd);
+    assert.match(await decide(shell(cmd), cfgFor(t), d), /citer ABC-128/, cmd);
   }
 });
 
 test('gh pr create : clé dans -t, --title, --title=, ou --body : passe', async (t) => {
   for (const cmd of [
-    'gh pr create --title "ODY-128 Gate" --body "x"',
-    'gh pr create -t "ody-128: gate" -b "x"',
-    'gh pr create --title="ODY-128 gate"',
-    'gh pr create --title "x" --body "Closes ODY-128"',
+    'gh pr create --title "ABC-128 Gate" --body "x"',
+    'gh pr create -t "abc-128: gate" -b "x"',
+    'gh pr create --title="ABC-128 gate"',
+    'gh pr create --title "x" --body "Closes ABC-128"',
   ]) {
     const d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
     assert.strictEqual(await decide(shell(cmd), cfgFor(t), d), null, cmd);
   }
 });
 
-test('gh pr create : clé d\'une autre issue (ODY-1280 pour ody-128) : refus', async (t) => {
+test('gh pr create : clé d\'une autre issue (ABC-1280 pour abc-128) : refus', async (t) => {
   const d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
-  assert.match(await decide(shell('gh pr create --title "ODY-1280 gate"'), cfgFor(t), d), /citer ODY-128/);
+  assert.match(await decide(shell('gh pr create --title "ABC-1280 gate"'), cfgFor(t), d), /citer ABC-128/);
 });
 
 test('gh pr create depuis main : refus', async (t) => {
   const d = fakeDeps({ runs: ON_BRANCH('main'), env: NO_LINEAR });
-  assert.match(await decide(shell('gh pr create --title "ODY-128 x"'), cfgFor(t), d), /branche qui porte son identifiant/);
+  assert.match(await decide(shell('gh pr create --title "ABC-128 x"'), cfgFor(t), d), /branche qui porte son identifiant/);
 });
 
 test('gh pr create : issue absente de Linear : refus', async (t) => {
   const d = fakeDeps({ runs: FEATURE, linear: LINEAR_MISSING });
-  assert.match(await decide(shell('gh pr create --title "ODY-128 gate"'), cfgFor(t), d), /n'existe pas dans Linear/);
+  assert.match(await decide(shell('gh pr create --title "ABC-128 gate"'), cfgFor(t), d), /n'existe pas dans Linear/);
 });
 
 // --- gh pr merge ---
@@ -313,7 +313,7 @@ test('gh pr merge : gh pr view en échec : fail-open', async (t) => {
   assert.strictEqual(await decide(shell('gh pr merge 42'), cfgFor(t), d), null);
 });
 
-// --- Voie rapide (ODY-130) : review rapide pour un petit diff hors chemins sensibles ---
+// --- Voie rapide (ABC-130) : review rapide pour un petit diff hors chemins sensibles ---
 
 const FAST_OK = ['<!-- review-rapide -->', '### Résumé\nPetit diff, rien à signaler.', 'Tests : node --test claude/hooks/tests/ : 0 échec', '**Verdict : OK**'].join('\n');
 const FAST_KO = FAST_OK.replace('**Verdict : OK**', '**Verdict : À CORRIGER**');
@@ -321,7 +321,7 @@ const FAST_NO_TESTS = FAST_OK.replace(/^Tests.*\n/m, '');
 // Vue complete de gh pr view : taille, fichiers, commentaires, numero et URL (petit diff par defaut).
 const prFull = (comments, { additions = 10, deletions = 0, changedFiles = 1, files = [{ path: 'src/a.js' }] } = {}) => ({
   status: 0,
-  stdout: JSON.stringify({ commits: [{ oid: 'abc', committedDate: COMMIT_AT }], comments, headRefName: 'feature/ody-128-process-gate', additions, deletions, changedFiles, files, number: 42, url: 'https://github.com/owner/repo/pull/42' }),
+  stdout: JSON.stringify({ commits: [{ oid: 'abc', committedDate: COMMIT_AT }], comments, headRefName: 'feature/abc-128-process-gate', additions, deletions, changedFiles, files, number: 42, url: 'https://github.com/owner/repo/pull/42' }),
 });
 // Reponse de gh api (liste des fichiers). Par defaut : une entree par fichier de la vue, sans renommage.
 const apiFiles = (entries) => ({ status: 0, stdout: JSON.stringify(entries) });
@@ -570,16 +570,16 @@ test('déploiement : patterns configurables ; commande sans rapport ignorée', a
 
 // --- Dossier effectif (cd, Set-Location, pushd, /c/...) ---
 
-const REPO_WIN = 'C:/Users/grego/Projets/config-ody-128';
+const REPO_WIN = 'C:/dev/config-abc-128';
 
 test('dossier effectif : cd, Set-Location, Push-Location et chemin Git Bash /c/... sont suivis', async (t) => {
   const cases = [
-    ['cd /c/Users/grego/Projets/config-ody-128 && git commit -m x', 'Bash'],
-    ['cd /c/Users/grego/Projets && cd config-ody-128 && git commit -m x', 'Bash'],
-    ['cd /c/Users/grego/Projets && git -C config-ody-128 commit -m x', 'Bash'],
-    ['Set-Location C:\\Users\\grego\\Projets\\config-ody-128; git commit -m x', 'PowerShell'],
-    ['Push-Location -Path "/c/Users/grego/Projets/config-ody-128"\ngit commit -m x', 'PowerShell'],
-    ['(cd /c/Users/grego/Projets/config-ody-128 && git commit -m x)', 'Bash'],
+    ['cd /c/dev/config-abc-128 && git commit -m x', 'Bash'],
+    ['cd /c/dev && cd config-abc-128 && git commit -m x', 'Bash'],
+    ['cd /c/dev && git -C config-abc-128 commit -m x', 'Bash'],
+    ['Set-Location C:\\dev\\config-abc-128; git commit -m x', 'PowerShell'],
+    ['Push-Location -Path "/c/dev/config-abc-128"\ngit commit -m x', 'PowerShell'],
+    ['(cd /c/dev/config-abc-128 && git commit -m x)', 'Bash'],
   ];
   for (const [cmd, tool] of cases) {
     const d = fakeDeps({ runs: ON_BRANCH('main') });
@@ -603,9 +603,9 @@ test('dossier effectif avec variable ou $( ) : fail-open, aucun appel externe', 
 
 // --- Sous-shells (...) : pile de dossiers, le cd ne déborde pas sur les segments suivants ---
 
-const OTHER_WIN = path.win32.normalize('C:/Users/grego/Projets/autre');
+const OTHER_WIN = path.win32.normalize('C:/dev/autre');
 const REPO_N = path.win32.normalize(REPO_WIN);
-const FEATURE_NAME = 'feature/ody-128-process-gate';
+const FEATURE_NAME = 'feature/abc-128-process-gate';
 // Branche courante selon le dossier d'appel (feature par defaut).
 const branchBy = (byDir) => ({
   'git branch --show-current': (args, cwd) => ({ status: 0, stdout: (byDir[path.win32.normalize(cwd)] || FEATURE_NAME) + '\n' }),
@@ -697,7 +697,7 @@ test('prefixe { : { cd ../autre; }; git commit -m m reste suivi après la fermet
   await commitRefusedIn(t, '{ cd ../autre; }; git commit -m m', OTHER_WIN);
 });
 
-// ODY-161 : un cd dans un bloc PowerShell (if ($ok) { ... }) est conditionnel, y compris pour le commit qui suit le bloc.
+// ABC-161 : un cd dans un bloc PowerShell (if ($ok) { ... }) est conditionnel, y compris pour le commit qui suit le bloc.
 test('bloc PowerShell : if ($ok) { Set-Location ../autre; git commit -m m } → dossier inconnu (cd conditionnel)', async (t) => {
   await unknownDirAfter(t, 'if ($ok) { Set-Location ../autre; git commit -m m }', 'PowerShell');
 });
@@ -744,57 +744,57 @@ test('pile pushd/popd inconnue (popd sans pushd, pushd sans dossier) : fail-open
   }
 });
 
-// --- ODY-161 : changement de dossier conditionnel (bloc Bash en milieu de commande, && / ||, accolades PowerShell) ---
+// --- ABC-161 : changement de dossier conditionnel (bloc Bash en milieu de commande, && / ||, accolades PowerShell) ---
 
-test('ODY-161 : cd dans un bloc if … fi suivi d\'un commit → dossier inconnu', async (t) => {
-  await unknownDirAfter(t, 'if c; then echo a; cd ../x; fi; git commit -m "ody-1 x"');
+test('ABC-161 : cd dans un bloc if … fi suivi d\'un commit → dossier inconnu', async (t) => {
+  await unknownDirAfter(t, 'if c; then echo a; cd ../x; fi; git commit -m "abc-1 x"');
 });
 
-test('ODY-161 : cd après un bloc if imbriqué (then if … fi) reste conditionnel → dossier inconnu', async (t) => {
+test('ABC-161 : cd après un bloc if imbriqué (then if … fi) reste conditionnel → dossier inconnu', async (t) => {
   await unknownDirAfter(t, 'if c; then if d; then echo a; fi; cd ../x; fi; git commit -m m');
 });
 
-test('ODY-161 : groupe { … } après && ou || : le cd qu\'il contient est conditionnel → dossier inconnu', async (t) => {
+test('ABC-161 : groupe { … } après && ou || : le cd qu\'il contient est conditionnel → dossier inconnu', async (t) => {
   await unknownDirAfter(t, 'x && { y; cd ../x; }; git commit -m m');
   await unknownDirAfter(t, 'x || { cd ../x; }; git commit -m m');
   await unknownDirAfter(t, 'test -d r || { mkdir r; cd r; }; git commit -m m');
 });
 
-test('ODY-161 : cd ../autre && { git commit -m m; } contrôle le commit dans ../autre', async (t) => {
+test('ABC-161 : cd ../autre && { git commit -m m; } contrôle le commit dans ../autre', async (t) => {
   const d = fakeDeps({ runs: branchBy({ [REPO_N]: 'main' }) });
   await decide(inRepo('cd ../autre && { git commit -m m; }'), cfgFor(t), d);
   assert.deepStrictEqual(d.runCalls.filter((c) => c.sig === 'git branch --show-current').map((c) => path.win32.normalize(c.cwd)), [OTHER_WIN]);
 });
 
-test('ODY-161 : false && cd ../x; git commit -m m → dossier inconnu', async (t) => {
+test('ABC-161 : false && cd ../x; git commit -m m → dossier inconnu', async (t) => {
   await unknownDirAfter(t, 'false && cd ../x; git commit -m m');
 });
 
-test('ODY-161 : x || cd ../x; git commit -m m → dossier inconnu', async (t) => {
+test('ABC-161 : x || cd ../x; git commit -m m → dossier inconnu', async (t) => {
   await unknownDirAfter(t, 'x || cd ../x; git commit -m m');
 });
 
-test('ODY-161 : cd ../autre || git commit -m m → dossier inconnu (le commit tourne si le cd a échoué)', async (t) => {
+test('ABC-161 : cd ../autre || git commit -m m → dossier inconnu (le commit tourne si le cd a échoué)', async (t) => {
   await unknownDirAfter(t, 'cd ../autre || git commit -m m');
 });
 
-test('ODY-161 : if ($false) { Set-Location ../x }; git commit -m m (PowerShell) → dossier inconnu', async (t) => {
+test('ABC-161 : if ($false) { Set-Location ../x }; git commit -m m (PowerShell) → dossier inconnu', async (t) => {
   await unknownDirAfter(t, 'if ($false) { Set-Location ../x }; git commit -m m', 'PowerShell');
 });
 
-test('ODY-161 : try { Set-Location ../x }; git commit -m m (PowerShell, bloc non reconnu) → dossier inconnu', async (t) => {
+test('ABC-161 : try { Set-Location ../x }; git commit -m m (PowerShell, bloc non reconnu) → dossier inconnu', async (t) => {
   await unknownDirAfter(t, 'try { Set-Location ../x }; git commit -m m', 'PowerShell');
 });
 
-test('ODY-161 : cd ../autre; git commit -m m (cd simple, non conditionnel) reste suivi', async (t) => {
+test('ABC-161 : cd ../autre; git commit -m m (cd simple, non conditionnel) reste suivi', async (t) => {
   await commitRefusedIn(t, 'cd ../autre; git commit -m m', OTHER_WIN);
 });
 
-test('ODY-161 : après fi, un cd ../autre non conditionnel est suivi : if c; then echo a; fi; cd ../autre; git commit -m m', async (t) => {
+test('ABC-161 : après fi, un cd ../autre non conditionnel est suivi : if c; then echo a; fi; cd ../autre; git commit -m m', async (t) => {
   await commitRefusedIn(t, 'if c; then echo a; fi; cd ../autre; git commit -m m', OTHER_WIN);
 });
 
-// --- ODY-162 : replay des changements de dossier en une passe (pas de relecture du préfixe à chaque cd), < 200 ms ---
+// --- ABC-162 : replay des changements de dossier en une passe (pas de relecture du préfixe à chaque cd), < 200 ms ---
 
 async function decidedFast(t, command) {
   const d = fakeDeps({ runs: ON_BRANCH('main') });
@@ -804,24 +804,24 @@ async function decidedFast(t, command) {
   assert.ok(ms < 200, `décision en ${ms.toFixed(1)} ms : ${command.slice(0, 30)}`);
 }
 
-test('ODY-162 : cd 20 000 fois d\'affilée décidé en moins de 200 ms', async (t) => {
+test('ABC-162 : cd 20 000 fois d\'affilée décidé en moins de 200 ms', async (t) => {
   await decidedFast(t, 'cd a; '.repeat(20000) + 'git commit -m "x"');
 });
 
-test('ODY-162 : if … fi répété 10 000 fois décidé en moins de 200 ms', async (t) => {
+test('ABC-162 : if … fi répété 10 000 fois décidé en moins de 200 ms', async (t) => {
   await decidedFast(t, 'if x; then cd a; fi; '.repeat(10000) + 'git commit -m "x"');
 });
 
-test('ODY-162 : then cd répété 20 000 fois décidé en moins de 200 ms', async (t) => {
+test('ABC-162 : then cd répété 20 000 fois décidé en moins de 200 ms', async (t) => {
   await decidedFast(t, 'then cd a; '.repeat(20000) + 'git commit -m "x"');
 });
 
 // --- Dépôts exclus (processGate.excludeRepos) ---
 
-const LAUNCH = 'C:/Users/grego/Projets/laststream';
-const CONTROLLED = 'C:/Users/grego/Projets/config-ody-128';
-// Toplevel simule : le dossier lui-meme s'il est un sous-depot (sub-repo) ou le depot controle, sinon laststream.
-const toplevel = (args, cwd) => ({ status: 0, stdout: (/(sub-repo|config-ody-128)$/.test(cwd) ? cwd : LAUNCH) + '\n' });
+const LAUNCH = 'C:/dev/app';
+const CONTROLLED = 'C:/dev/config-abc-128';
+// Toplevel simule : le dossier lui-meme s'il est un sous-depot (sub-repo) ou le depot controle, sinon app.
+const toplevel = (args, cwd) => ({ status: 0, stdout: (/(sub-repo|config-abc-128)$/.test(cwd) ? cwd : LAUNCH) + '\n' });
 
 test('processGate.excludeRepos : commit sur main dans un dépôt exclu passe, sans autre appel', async (t) => {
   const d = fakeDeps({ runs: { ...ON_BRANCH('main'), 'git rev-parse --show-toplevel': toplevel } });
@@ -831,7 +831,7 @@ test('processGate.excludeRepos : commit sur main dans un dépôt exclu passe, sa
 
 test('processGate.excludeRepos : casse et séparateurs ignorés', async (t) => {
   const d = fakeDeps({ runs: { ...ON_BRANCH('main'), 'git rev-parse --show-toplevel': toplevel } });
-  assert.strictEqual(await decide(shell('git commit -m x'), cfgFor(t, { excludeRepos: ['c:\\users\\GREGO\\Projets\\laststream\\'] }), d), null);
+  assert.strictEqual(await decide(shell('git commit -m x'), cfgFor(t, { excludeRepos: ['c:\\dev\\app\\'] }), d), null);
   assert.ok(!d.runCalls.some((c) => c.sig === 'git branch --show-current'));
 });
 
@@ -841,14 +841,14 @@ test('processGate.excludeRepos : sous-dépôt situé dans un dossier exclu reste
   assert.match(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), /branche qui porte son identifiant/);
 });
 
-test('processGate.excludeRepos : session dans laststream, git -C vers un dépôt contrôlé sur main : refus', async (t) => {
+test('processGate.excludeRepos : session dans app, git -C vers un dépôt contrôlé sur main : refus', async (t) => {
   const d = fakeDeps({ runs: { ...ON_BRANCH('main'), 'git rev-parse --show-toplevel': toplevel } });
   const input = { tool_name: 'Bash', tool_input: { command: `git -C ${CONTROLLED} commit -m x` }, cwd: LAUNCH };
   assert.match(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), /branche qui porte son identifiant/);
   assert.strictEqual(d.runCalls[0].cwd, path.win32.normalize(CONTROLLED));
 });
 
-test('processGate.excludeRepos : session dans un dépôt contrôlé, git -C vers laststream (exclu) : passe', async (t) => {
+test('processGate.excludeRepos : session dans un dépôt contrôlé, git -C vers app (exclu) : passe', async (t) => {
   const d = fakeDeps({ runs: { ...ON_BRANCH('main'), 'git rev-parse --show-toplevel': toplevel } });
   const input = { tool_name: 'Bash', tool_input: { command: `git -C ${LAUNCH} commit -m x` }, cwd: CONTROLLED };
   assert.strictEqual(await decide(input, cfgFor(t, { excludeRepos: [LAUNCH] }), d), null);
@@ -895,22 +895,22 @@ test('gh pr create : --body-file lu, -F - non inspecté, --fill vérifié sur le
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'process-gate-body-'));
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
   const bodyFile = path.join(dir, 'body.md');
-  fs.writeFileSync(bodyFile, 'Closes ODY-128\n');
+  fs.writeFileSync(bodyFile, 'Closes ABC-128\n');
 
   let d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
   assert.strictEqual(await decide(shell(`gh pr create --title "rien" --body-file "${bodyFile}"`), cfgFor(t), d), null);
 
   d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
-  assert.match(await decide(shell('gh pr create --title "rien" -F -'), cfgFor(t), d), /doit citer ODY-128/);
+  assert.match(await decide(shell('gh pr create --title "rien" -F -'), cfgFor(t), d), /doit citer ABC-128/);
 
   d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
-  assert.strictEqual(await decide(shell('gh pr create --title "ODY-128 x" -F -'), cfgFor(t), d), null);
+  assert.strictEqual(await decide(shell('gh pr create --title "ABC-128 x" -F -'), cfgFor(t), d), null);
 
-  d = fakeDeps({ runs: { ...FEATURE, 'git log -1 --format=%s': { status: 0, stdout: 'ODY-128 gate\n' } }, env: NO_LINEAR });
+  d = fakeDeps({ runs: { ...FEATURE, 'git log -1 --format=%s': { status: 0, stdout: 'ABC-128 gate\n' } }, env: NO_LINEAR });
   assert.strictEqual(await decide(shell('gh pr create --fill'), cfgFor(t), d), null);
 
   d = fakeDeps({ runs: { ...FEATURE, 'git log -1 --format=%s': { status: 0, stdout: 'autre sujet\n' } }, env: NO_LINEAR });
-  assert.match(await decide(shell('gh pr create --fill --title "x"'), cfgFor(t), d), /doit citer ODY-128/);
+  assert.match(await decide(shell('gh pr create --fill --title "x"'), cfgFor(t), d), /doit citer ABC-128/);
 
   d = fakeDeps({ runs: FEATURE, env: NO_LINEAR });
   assert.strictEqual(await decide(shell('gh pr create --title "rien" --body-file "$TMP/x.md"'), cfgFor(t), d), null, 'chemin variable : fail-open');
@@ -1071,7 +1071,7 @@ test('merge réservé à l\'humain : agentMerge « true » en texte ne vaut pas 
 });
 
 test('clé d\'issue par défaut : toute équipe Linear (BENCH-41, LOVER-7, A-1), convention <ID>-slug ou feature/<clé>-…', async (t) => {
-  for (const branch of ['BENCH-41-webhooks-doublons', 'feature/lover-7-export', 'fix/A-1-x', 'feature/ody-128-process-gate']) {
+  for (const branch of ['BENCH-41-webhooks-doublons', 'feature/lover-7-export', 'fix/A-1-x', 'feature/abc-128-process-gate']) {
     const d = fakeDeps({ runs: ON_BRANCH(branch), env: NO_LINEAR });
     assert.strictEqual(await decide(shell('git commit -m x'), { processGate: {} }, d), null, branch);
   }

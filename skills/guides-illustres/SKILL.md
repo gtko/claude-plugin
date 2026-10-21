@@ -6,7 +6,7 @@ description: Produit des guides utilisateur illustrés (HTML, captures réelles,
 
 # Guides illustrés
 
-Méthode éprouvée sur les guides Laststream (profils, profil enfant, extension Stremio, TV M3U). Résultat : un sommaire `/guides/`, une page par parcours, chaque étape avec sa capture, une vidéo de 15-20 s par guide, tout régénérable par script.
+Méthode éprouvée sur les guides d'une application web (par exemple : inscription, réglages, import de données). Résultat : un sommaire `/guides/`, une page par parcours, chaque étape avec sa capture, une vidéo de 15-20 s par guide, tout régénérable par script.
 
 Les chemins (`public/guides/`, `guides-capture/`), la stack (dev server, API locale) et le déploiement statique sont ceux de cet exemple : les adapter à la structure du projet cible.
 

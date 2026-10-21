@@ -532,10 +532,10 @@ const DENY = [
 ];
 const ALLOW = [
   'git push',
-  'git push -u origin feature/ody-1-x',
-  'git push --force origin feature/ody-1-x',
-  'git push --force-with-lease origin feature/ody-1-x',
-  'git push origin +feature/ody-1-x',
+  'git push -u origin feature/abc-1-x',
+  'git push --force origin feature/abc-1-x',
+  'git push --force-with-lease origin feature/abc-1-x',
+  'git push origin +feature/abc-1-x',
   'git reset --hard HEAD~1',
   'git reset --hard origin/feature/x',
   'git branch -d feature/x',
@@ -545,12 +545,12 @@ const ALLOW = [
   'rm -rf node_modules',
   'rm -rf ./dist',
   'rm -rf /tmp/build',
-  'rm -rf /c/Users/grego/tmp',
+  'rm -rf /c/dev/tmp',
   'rm -rf ~/projets',
   'rm -rf .git-old',
   'rm -rf *.log',
   'Remove-Item -Recurse -Force .\\build',
-  "Remove-Item -Recurse -Force 'C:\\Users\\grego\\x'",
+  "Remove-Item -Recurse -Force 'C:\\dev\\x'",
   'wrangler deploy',
   'wrangler d1 execute mabase --command "select 1"',
   'gh pr create --title x',
@@ -664,7 +664,7 @@ test('point 2 : force sans cible sur la branche courante (main refuse ; fix/x et
 });
 
 test('point 2 : cible explicite fix/x passe, meme depuis main ; main explicite refuse', () => {
-  for (const c of ['git push --force-with-lease origin fix/x', 'git push -f origin fix/x', 'git push --force origin feature/ody-1-x']) {
+  for (const c of ['git push --force-with-lease origin fix/x', 'git push -f origin fix/x', 'git push --force origin feature/abc-1-x']) {
     allowed(decide(bash(sid(), c, { cwd: REPO_MAIN }), C));
   }
   denied(decide(bash(sid(), 'git push --force-with-lease origin main', { cwd: REPO_FIX }), C), DENY_MSG);
@@ -729,22 +729,22 @@ test('point 9 : segment tronque a 16 Ko ; cible dans les premiers Ko vue, comman
   denied(decide(bash(sid(), `echo ${long} && rm -rf /`), C), DENY_MSG);
 });
 
-// ODY-133, 2e review : heredoc arithmétique, guillemets échappés, alias @ de HEAD, doc wrangler.
-test('ODY-133 N1 : décalage arithmétique $((1<<2)) n\'ouvre pas de heredoc ; la ligne suivante reste examinée', () => {
+// ABC-133, 2e review : heredoc arithmétique, guillemets échappés, alias @ de HEAD, doc wrangler.
+test('ABC-133 N1 : décalage arithmétique $((1<<2)) n\'ouvre pas de heredoc ; la ligne suivante reste examinée', () => {
   denied(decide(bash(sid(), 'echo $((1<<2))\nrm -rf ~'), C), DENY_MSG);
   allowed(decide(bash(sid(), 'echo $((1<<2))\necho ok'), C));
   allowed(decide(bash(sid(), 'cat <<_fin\nrm -rf ~\n_fin\necho ok'), C));
   denied(decide(bash(sid(), 'cat <<EOF\nok\nEOF\nrm -rf ~'), C), DENY_MSG);
 });
 
-test('ODY-133 N2 : guillemets échappés dans bash -c / eval : la commande interne est examinée', () => {
+test('ABC-133 N2 : guillemets échappés dans bash -c / eval : la commande interne est examinée', () => {
   denied(decide(bash(sid(), 'bash -c "rm -rf \\"$HOME\\""'), C), DENY_MSG);
   denied(decide(bash(sid(), 'bash -c "rm -rf \\$HOME"'), C), DENY_MSG);
   denied(decide(bash(sid(), 'eval "rm -rf \\"/\\""'), C), DENY_MSG);
   allowed(decide(bash(sid(), 'bash -c "echo \\"ok\\""'), C));
 });
 
-test('ODY-133 N3 : @ (alias de HEAD) = branche courante : refusé sur main, passe sur fix/x', () => {
+test('ABC-133 N3 : @ (alias de HEAD) = branche courante : refusé sur main, passe sur fix/x', () => {
   for (const c of ['git push --force origin @', 'git push -f origin @', 'git push --force-with-lease origin @']) {
     denied(decide(bash(sid(), c, { cwd: REPO_MAIN }), C), DENY_MSG);
     allowed(decide(bash(sid(), c, { cwd: REPO_FIX }), C));
@@ -752,7 +752,7 @@ test('ODY-133 N3 : @ (alias de HEAD) = branche courante : refusé sur main, pass
   denied(decide(bash(sid(), `git -C "${REPO_MAIN}" push --force origin @`), C), DENY_MSG);
 });
 
-test('ODY-133 N5 : la règle wrangler documente les exclusions volontaires (kv key, r2 object, d1 execute)', () => {
+test('ABC-133 N5 : la règle wrangler documente les exclusions volontaires (kv key, r2 object, d1 execute)', () => {
   const r = BASE.toolGuard.denyCommands.find((x) => /wrangler/.test(x.pattern));
   assert.ok(r, 'règle wrangler introuvable');
   assert.match(r._note, /volontairement exclus/);
@@ -761,8 +761,8 @@ test('ODY-133 N5 : la règle wrangler documente les exclusions volontaires (kv k
   }
 });
 
-// ODY-133, 3e review : push forcé +@/+HEAD depuis main ; échappements hors wrapper (masquage, heredoc).
-test('ODY-133 3e review : push forcé +@ et +HEAD depuis main refusés ; HEAD:feature/x autorisé', () => {
+// ABC-133, 3e review : push forcé +@/+HEAD depuis main ; échappements hors wrapper (masquage, heredoc).
+test('ABC-133 3e review : push forcé +@ et +HEAD depuis main refusés ; HEAD:feature/x autorisé', () => {
   for (const c of ['git push origin +@', 'git push origin +HEAD']) {
     denied(decide(bash(sid(), c, { cwd: REPO_MAIN }), C), DENY_MSG);
     allowed(decide(bash(sid(), c, { cwd: REPO_FIX }), C));
@@ -770,48 +770,48 @@ test('ODY-133 3e review : push forcé +@ et +HEAD depuis main refusés ; HEAD:fe
   allowed(decide(bash(sid(), 'git push origin HEAD:feature/x', { cwd: REPO_MAIN }), C));
 });
 
-test('ODY-133 3e review : guillemets échappés hors wrapper examinés ; phrase entre guillemets et \\" dans une phrase autorisés', () => {
+test('ABC-133 3e review : guillemets échappés hors wrapper examinés ; phrase entre guillemets et \\" dans une phrase autorisés', () => {
   denied(decide(bash(sid(), 'echo \\" ; rm -rf / ; echo \\"'), C), DENY_MSG);
   allowed(decide(bash(sid(), 'echo "rm -rf /"'), C));
   allowed(decide(bash(sid(), "echo 'a \\\" b'"), C));
   allowed(decide(bash(sid(), 'echo "a \\" rm -rf / ; echo b"'), C));
 });
 
-test('ODY-133 3e review : \\" dans une chaîne ne masque pas la suite ; \\< n\'ouvre pas de heredoc, \\\\<< en ouvre un', () => {
+test('ABC-133 3e review : \\" dans une chaîne ne masque pas la suite ; \\< n\'ouvre pas de heredoc, \\\\<< en ouvre un', () => {
   denied(decide(bash(sid(), 'echo "a\\" <<X"\nrm -rf /\nX'), C), DENY_MSG);
   denied(decide(bash(sid(), 'echo \\<<EOF\nrm -rf /\nEOF'), C), DENY_MSG);
   allowed(decide(bash(sid(), 'echo \\\\<<EOF\nrm -rf /\nEOF'), C));
 });
 
-// ODY-133 : tokenisation des guillemets selon l'outil. PowerShell n'échappe pas avec \ (backtick, guillemets doublés).
+// ABC-133 : tokenisation des guillemets selon l'outil. PowerShell n'échappe pas avec \ (backtick, guillemets doublés).
 const pw = (command, extra) => inp(sid(), 'PowerShell', { command }, extra);
-test('ODY-133 PS : \\ ne protège pas le guillemet fermant en PowerShell ; Bash inchangé', () => {
+test('ABC-133 PS : \\ ne protège pas le guillemet fermant en PowerShell ; Bash inchangé', () => {
   denied(decide(pw('cd "C:\\a b\\"; git push --force origin main; echo "ok"'), C), DENY_MSG);
   denied(decide(pw('Remove-Item "C:\\q y\\"; rm -rf /; echo "z"'), C), DENY_MSG);
   allowed(decide(bash(sid(), 'cd "C:\\a b\\"; git push --force origin main; echo "ok"'), C));
   allowed(decide(bash(sid(), 'Remove-Item "C:\\q y\\"; rm -rf /; echo "z"'), C));
 });
 
-test('ODY-133 PS : backtick et "" ne ferment pas une chaîne ; backtick hors chaîne n\'en ouvre pas', () => {
+test('ABC-133 PS : backtick et "" ne ferment pas une chaîne ; backtick hors chaîne n\'en ouvre pas', () => {
   allowed(decide(pw('echo "x `" ; rm -rf / ; y"'), C));
   allowed(decide(pw('echo "a "" ; rm -rf / ; ""b"'), C));
   allowed(decide(pw("echo 'it''s ; rm -rf / ; ok'"), C));
   denied(decide(pw('echo `"; rm -rf /; echo "x"'), C), DENY_MSG);
 });
 
-test('ODY-133 PS : guillemets typographiques (“ ” „ ‘ ’ ‚ ‛) ferment ou ouvrent une chaîne', () => {
+test('ABC-133 PS : guillemets typographiques (“ ” „ ‘ ’ ‚ ‛) ferment ou ouvrent une chaîne', () => {
   denied(decide(pw('echo "x” ; rm -rf / ; echo "y"'), C), DENY_MSG);
   denied(decide(pw("echo 'x’ ; rm -rf / ; echo 'y'"), C), DENY_MSG);
   denied(decide(pw('echo “x” ; rm -rf / ; echo “y”'), C), DENY_MSG);
   allowed(decide(pw('echo “x ; rm -rf / ; y”'), C));
 });
 
-test("ODY-133 PS : << n'ouvre pas de corps de heredoc (Bash seulement)", () => {
+test("ABC-133 PS : << n'ouvre pas de corps de heredoc (Bash seulement)", () => {
   denied(decide(pw('cat <<_fin\nrm -rf ~\n_fin\necho ok'), C), DENY_MSG);
   allowed(decide(bash(sid(), 'cat <<_fin\nrm -rf ~\n_fin\necho ok'), C));
 });
 
-test('ODY-133 PS : push forcé vers "@", "HEAD" ou \'@\' refusé depuis main, passe sur fix/x ; HEAD:feature/x passe', () => {
+test('ABC-133 PS : push forcé vers "@", "HEAD" ou \'@\' refusé depuis main, passe sur fix/x ; HEAD:feature/x passe', () => {
   for (const c of ['git push -f origin "@"', 'git push --force origin "HEAD"', "git push -f origin '@'"]) {
     denied(decide(pw(c, { cwd: REPO_MAIN }), C), DENY_MSG);
     denied(decide(bash(sid(), c, { cwd: REPO_MAIN }), C), DENY_MSG);
@@ -821,8 +821,8 @@ test('ODY-133 PS : push forcé vers "@", "HEAD" ou \'@\' refusé depuis main, pa
   allowed(decide(bash(sid(), 'git push origin "HEAD:feature/x"', { cwd: REPO_MAIN }), C));
 });
 
-// ODY-133 review : une chaîne entre guillemets doubles qui contient $( (ou un backtick en Bash) s'exécute : examinée.
-test('ODY-133 review : "$(...)" et "`...`" entre guillemets doubles examinés (Bash et PowerShell)', () => {
+// ABC-133 review : une chaîne entre guillemets doubles qui contient $( (ou un backtick en Bash) s'exécute : examinée.
+test('ABC-133 review : "$(...)" et "`...`" entre guillemets doubles examinés (Bash et PowerShell)', () => {
   denied(decide(bash(sid(), 'echo "$(rm -rf ~) done"'), C), DENY_MSG);
   denied(decide(bash(sid(), 'echo "`rm -rf ~` done"'), C), DENY_MSG);
   denied(decide(pw('echo "$(Remove-Item -Recurse -Force C:\\) done"'), C), DENY_MSG);
@@ -835,16 +835,16 @@ test('ODY-133 review : "$(...)" et "`...`" entre guillemets doubles examinés (B
   allowed(decide(pw('git commit -m "fix: a b"', { cwd: REPO_MAIN }), C));
 });
 
-// ODY-133 review : powershell -Command "..." avec "" doublés : tout l'argument est examiné (le capture allait jusqu'au premier ").
-test('ODY-133 review : powershell -Command "..." avec "" doublés examiné en entier (Bash et PowerShell)', () => {
+// ABC-133 review : powershell -Command "..." avec "" doublés : tout l'argument est examiné (le capture allait jusqu'au premier ").
+test('ABC-133 review : powershell -Command "..." avec "" doublés examiné en entier (Bash et PowerShell)', () => {
   denied(decide(bash(sid(), 'powershell -Command "echo ""a b""; rm -rf ~"'), C), DENY_MSG);
   denied(decide(pw('powershell -Command "echo ""a b""; rm -rf ~"'), C), DENY_MSG);
   denied(decide(bash(sid(), 'bash -c "echo a"" ; rm -rf ~"'), C), DENY_MSG);
   allowed(decide(pw('powershell -Command "echo ""a b""; echo ok"'), C));
 });
 
-// ODY-133 review : guillemets entre le + et le refspec (+"HEAD", +'HEAD', +"@") : refusés depuis main.
-test('ODY-133 review : push forcé +"HEAD", +\'HEAD\' et +"@" refusé depuis main, passe sur fix/x ; HEAD:feature/x passe', () => {
+// ABC-133 review : guillemets entre le + et le refspec (+"HEAD", +'HEAD', +"@") : refusés depuis main.
+test('ABC-133 review : push forcé +"HEAD", +\'HEAD\' et +"@" refusé depuis main, passe sur fix/x ; HEAD:feature/x passe', () => {
   for (const c of ['git push origin +"HEAD"', "git push origin +'HEAD'", 'git push origin +"@"']) {
     denied(decide(bash(sid(), c, { cwd: REPO_MAIN }), C), DENY_MSG);
     denied(decide(pw(c, { cwd: REPO_MAIN }), C), DENY_MSG);
@@ -853,25 +853,25 @@ test('ODY-133 review : push forcé +"HEAD", +\'HEAD\' et +"@" refusé depuis mai
   allowed(decide(bash(sid(), 'git push origin HEAD:feature/x', { cwd: REPO_MAIN }), C));
 });
 
-// ODY-133 review : options avant -Command (-NoProfile, -ExecutionPolicy Bypass) et backtick échappé dans powershell -Command "...".
-test('ODY-133 review : powershell avec options avant -Command refusé (Bash et PowerShell)', () => {
+// ABC-133 review : options avant -Command (-NoProfile, -ExecutionPolicy Bypass) et backtick échappé dans powershell -Command "...".
+test('ABC-133 review : powershell avec options avant -Command refusé (Bash et PowerShell)', () => {
   denied(decide(bash(sid(), 'powershell -NoProfile -Command "Remove-Item -Recurse -Force C:\\Users"'), C), DENY_MSG);
   denied(decide(pw('powershell -NoProfile -Command "Remove-Item -Recurse -Force C:\\Users"'), C), DENY_MSG);
   denied(decide(bash(sid(), 'powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse ."'), C), DENY_MSG);
   denied(decide(pw('powershell -NoProfile -ExecutionPolicy Bypass -Command "Remove-Item -Recurse ."'), C), DENY_MSG);
 });
 
-test('ODY-133 review : powershell -Command "echo `" ; Remove-Item ..." refusé : le backtick échappe le guillemet (PowerShell)', () => {
+test('ABC-133 review : powershell -Command "echo `" ; Remove-Item ..." refusé : le backtick échappe le guillemet (PowerShell)', () => {
   denied(decide(pw('powershell -Command "echo `" ; Remove-Item -Recurse -Force C:\ "'), C), DENY_MSG);
 });
 
-test('ODY-133 review : powershell avec options et bash -c avec substitution sans danger autorisés', () => {
+test('ABC-133 review : powershell avec options et bash -c avec substitution sans danger autorisés', () => {
   allowed(decide(bash(sid(), 'powershell -NoProfile -Command "Get-ChildItem C:\Users"'), C));
   allowed(decide(pw('powershell -NoProfile -Command "Get-ChildItem C:\Users"'), C));
   allowed(decide(bash(sid(), 'bash -c "echo `date`"'), C));
 });
 
-test('ODY-133 review : 30 000 backticks sans guillemet fermant après powershell -Command " décidés en moins de 200 ms', () => {
+test('ABC-133 review : 30 000 backticks sans guillemet fermant après powershell -Command " décidés en moins de 200 ms', () => {
   const cmd = 'powershell -Command "' + '`'.repeat(30000);
   for (const input of [bash(sid(), cmd), pw(cmd)]) {
     const t0 = performance.now();
@@ -882,8 +882,8 @@ test('ODY-133 review : 30 000 backticks sans guillemet fermant après powershell
   }
 });
 
-// ODY-156 : wrappers shell hors SHELL_ARG (& powershell, Start-Process -ArgumentList, cmd, chemin entre guillemets).
-test('ODY-156 point 1 : & powershell / pwsh (positionnel ou entre apostrophes), cmd et chemin entre guillemets examinés', () => {
+// ABC-156 : wrappers shell hors SHELL_ARG (& powershell, Start-Process -ArgumentList, cmd, chemin entre guillemets).
+test('ABC-156 point 1 : & powershell / pwsh (positionnel ou entre apostrophes), cmd et chemin entre guillemets examinés', () => {
   denied(decide(bash(sid(), '& powershell "Remove-Item -Recurse -Force C:\\Users"'), C), DENY_MSG);
   denied(decide(pw("& pwsh 'Remove-Item -Recurse -Force C:\\Users'"), C), DENY_MSG);
   denied(decide(pw('& "C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "Remove-Item -Recurse -Force C:\\Users"'), C), DENY_MSG);
@@ -892,18 +892,18 @@ test('ODY-156 point 1 : & powershell / pwsh (positionnel ou entre apostrophes), 
   allowed(decide(pw('& "C:\\Program Files\\PowerShell\\7\\pwsh.exe" -Command "Get-Date"'), C));
 });
 
-test('ODY-156 point 1 : Start-Process -ArgumentList (chaîne, liste, cmd, ; dans la chaîne) examiné', () => {
+test('ABC-156 point 1 : Start-Process -ArgumentList (chaîne, liste, cmd, ; dans la chaîne) examiné', () => {
   denied(decide(pw('Start-Process powershell -ArgumentList "-Command Remove-Item -Recurse -Force C:\\Users"'), C), DENY_MSG);
   denied(decide(pw("Start-Process pwsh -ArgumentList '-Command Remove-Item -Recurse -Force C:\\Users'"), C), DENY_MSG);
   denied(decide(pw('Start-Process powershell -ArgumentList "-NoProfile","-Command","Remove-Item -Recurse -Force C:\\Users"'), C), DENY_MSG);
   denied(decide(pw('Start-Process cmd -ArgumentList "/c rd /s /q C:\\Users"'), C), DENY_MSG);
   denied(decide(pw('Start-Process powershell -ArgumentList "-Command Get-Date; Remove-Item -Recurse -Force C:\\"'), C), DENY_MSG);
-  allowed(decide(pw('Start-Process notepad -ArgumentList "C:\\Users\\x.txt"'), C));
+  allowed(decide(pw('Start-Process notepad -ArgumentList "D:\\data\\x.txt"'), C));
   allowed(decide(pw('Start-Process powershell -ArgumentList "-Command Get-Date"'), C));
 });
 
-// ODY-156 point 2 : dans powershell/pwsh, \ n'échappe rien ; cmd non plus. Bash garde \".
-test('ODY-156 point 2 : powershell -Command "...C:\\" : le \\ ne protège pas le guillemet fermant (PowerShell, cmd)', () => {
+// ABC-156 point 2 : dans powershell/pwsh, \ n'échappe rien ; cmd non plus. Bash garde \".
+test('ABC-156 point 2 : powershell -Command "...C:\\" : le \\ ne protège pas le guillemet fermant (PowerShell, cmd)', () => {
   denied(decide(pw('powershell -Command "Remove-Item -Recurse -Force C:\\"'), C), DENY_MSG);
   denied(decide(bash(sid(), 'powershell -Command "Remove-Item -Recurse -Force C:\\"'), C), DENY_MSG);
   denied(decide(pw('pwsh -c "Remove-Item -Recurse -Force C:\\"; echo ok'), C), DENY_MSG);
@@ -911,8 +911,8 @@ test('ODY-156 point 2 : powershell -Command "...C:\\" : le \\ ne protège pas le
   allowed(decide(pw('powershell -Command "Get-ChildItem C:\\"'), C));
 });
 
-// ODY-156 point 3 : dans bash, ` n'échappe pas le guillemet ; l'argument de sh -c se termine au premier ".
-test('ODY-156 point 3 : bash, ` ne protège pas le guillemet ; PowerShell garde l échappement', () => {
+// ABC-156 point 3 : dans bash, ` n'échappe pas le guillemet ; l'argument de sh -c se termine au premier ".
+test('ABC-156 point 3 : bash, ` ne protège pas le guillemet ; PowerShell garde l échappement', () => {
   // ~"" n'est pas étendu par bash et rm reste collé au mot echo : sh reçoit « echo rm », rien ne tourne.
   allowed(decide(bash(sid(), 'sh -c "echo `x`"rm -rf ~""'), C));
   // Substitution ouverte dans une chaîne : la chaîne n'est pas masquée, rm reste examiné.
@@ -921,8 +921,8 @@ test('ODY-156 point 3 : bash, ` ne protège pas le guillemet ; PowerShell garde 
   denied(decide(pw('powershell -Command "echo `" ; Remove-Item -Recurse -Force C:\\ "'), C), DENY_MSG);
 });
 
-// ODY-156 point 4 : la grâce de budget suit la tokenisation PowerShell (un " précédé de ` ne ferme pas la chaîne).
-test('ODY-156 point 4 : grâce de budget PowerShell : wrangler deploy caché dans une fausse chaîne refusé, git status accepté', () => {
+// ABC-156 point 4 : la grâce de budget suit la tokenisation PowerShell (un " précédé de ` ne ferme pas la chaîne).
+test('ABC-156 point 4 : grâce de budget PowerShell : wrangler deploy caché dans une fausse chaîne refusé, git status accepté', () => {
   const s = sid();
   const sub = (command) => inp(s, 'PowerShell', { command }, SUB('haiku-builder'));
   for (let i = 0; i < 60; i++) allowed(decide(sub('Get-Date ' + i), C));
@@ -930,7 +930,7 @@ test('ODY-156 point 4 : grâce de budget PowerShell : wrangler deploy caché dan
   allowed(decide(sub('git status'), C));
 });
 
-test('ODY-156 : Start-Process -ArgumentList avec 15 000 paires `" non fermées décidé en moins de 200 ms', () => {
+test('ABC-156 : Start-Process -ArgumentList avec 15 000 paires `" non fermées décidé en moins de 200 ms', () => {
   const cmd = 'Start-Process powershell -ArgumentList ' + '`"'.repeat(15000);
   for (const input of [bash(sid(), cmd), pw(cmd)]) {
     const t0 = performance.now();
@@ -940,8 +940,8 @@ test('ODY-156 : Start-Process -ArgumentList avec 15 000 paires `" non fermées d
   }
 });
 
-// ODY-158 point 1 : pwsh/powershell sans -Command n'est examiné que hors chaîne entre guillemets (faux positif sur un message de commit).
-test('ODY-158 point 1 : pwsh positionnel dans un message de commit non refusé (Bash et PowerShell) ; hors chaîne entre guillemets, examiné', () => {
+// ABC-158 point 1 : pwsh/powershell sans -Command n'est examiné que hors chaîne entre guillemets (faux positif sur un message de commit).
+test('ABC-158 point 1 : pwsh positionnel dans un message de commit non refusé (Bash et PowerShell) ; hors chaîne entre guillemets, examiné', () => {
   const COMMIT = 'git commit -m "doc: pwsh \'Remove-Item -Recurse ~\' est refusé"';
   allowed(decide(bash(sid(), COMMIT), C));
   allowed(decide(pw(COMMIT), C));
@@ -950,7 +950,7 @@ test('ODY-158 point 1 : pwsh positionnel dans un message de commit non refusé (
   denied(decide(bash(sid(), 'echo pwsh \'Remove-Item -Recurse ~\''), C), DENY_MSG);
 });
 
-test('ODY-158 point 1 : pwsh positionnel refusé (début, &, ;, chemin entre guillemets, lanceurs, Bash et PowerShell)', () => {
+test('ABC-158 point 1 : pwsh positionnel refusé (début, &, ;, chemin entre guillemets, lanceurs, Bash et PowerShell)', () => {
   for (const c of [
     "pwsh 'Remove-Item -Recurse ~'",
     "& pwsh 'Remove-Item -Recurse ~'",
@@ -965,13 +965,13 @@ test('ODY-158 point 1 : pwsh positionnel refusé (début, &, ;, chemin entre gui
   }
 });
 
-test('ODY-158 point 1 : forme -Command (ou -c) toujours détectée partout, y compris dans un message', () => {
+test('ABC-158 point 1 : forme -Command (ou -c) toujours détectée partout, y compris dans un message', () => {
   denied(decide(bash(sid(), 'git commit -m "pwsh -Command \'Remove-Item -Recurse ~\'"'), C), DENY_MSG);
   denied(decide(pw('git commit -m "pwsh -c \'Remove-Item -Recurse ~\'"'), C), DENY_MSG);
 });
 
-// ODY-158 point 2 : options répétées avant un nom de shell (chaque nom ne doit plus relancer l'analyse jusqu'à la fin).
-test('ODY-158 point 2 : "pwsh -a " et "bash -a " répétés 12 000 fois décidés en moins de 200 ms (Bash et PowerShell)', () => {
+// ABC-158 point 2 : options répétées avant un nom de shell (chaque nom ne doit plus relancer l'analyse jusqu'à la fin).
+test('ABC-158 point 2 : "pwsh -a " et "bash -a " répétés 12 000 fois décidés en moins de 200 ms (Bash et PowerShell)', () => {
   for (const cmd of ['"' + 'pwsh -a '.repeat(12000), '"' + 'bash -a '.repeat(12000)]) {
     for (const input of [bash(sid(), cmd), pw(cmd)]) {
       const t0 = performance.now();
@@ -982,12 +982,12 @@ test('ODY-158 point 2 : "pwsh -a " et "bash -a " répétés 12 000 fois décidé
   }
 });
 
-// ODY-158 point 2 : un nom de shell en valeur d'option ouvre sa propre invocation, examinée à part.
-test('ODY-158 point 2 : bash -o sh -c "rm -rf ~" refusé (l invocation sh -c est examinée)', () => {
+// ABC-158 point 2 : un nom de shell en valeur d'option ouvre sa propre invocation, examinée à part.
+test('ABC-158 point 2 : bash -o sh -c "rm -rf ~" refusé (l invocation sh -c est examinée)', () => {
   denied(decide(bash(sid(), 'bash -o sh -c "rm -rf ~"'), C), DENY_MSG);
 });
 
-// ODY-158 review : pwsh positionnel refusé hors chaîne entre guillemets, quelle que soit la position (12 formes, Bash et PowerShell).
+// ABC-158 review : pwsh positionnel refusé hors chaîne entre guillemets, quelle que soit la position (12 formes, Bash et PowerShell).
 const REVIEW_FORMS = [
   "{ powershell 'Remove-Item -Recurse ~'; }",
   "if ($x) { powershell 'Remove-Item -Recurse ~' }",
@@ -1002,14 +1002,14 @@ const REVIEW_FORMS = [
   "& 'C:\\Program Files\\PowerShell\\7\\pwsh.exe' 'Remove-Item -Recurse ~'",
   "{ powershell -com 'Remove-Item -Recurse ~'; }",
 ];
-test('ODY-158 review : pwsh positionnel refusé partout hors chaîne (12 formes, Bash et PowerShell)', () => {
+test('ABC-158 review : pwsh positionnel refusé partout hors chaîne (12 formes, Bash et PowerShell)', () => {
   for (const c of REVIEW_FORMS) {
     denied(decide(bash(sid(), c), C), DENY_MSG);
     denied(decide(pw(c), C), DENY_MSG);
   }
 });
 
-test('ODY-158 review : nom ou chemin entre guillemets, substitution "$(...)" et abréviations de -Command refusés (Bash et PowerShell)', () => {
+test('ABC-158 review : nom ou chemin entre guillemets, substitution "$(...)" et abréviations de -Command refusés (Bash et PowerShell)', () => {
   for (const c of [
     '"pwsh" \'Remove-Item -Recurse ~\'',
     "'C:\\Program Files\\PowerShell\\7\\pwsh.exe' 'Remove-Item -Recurse ~'",
@@ -1023,7 +1023,7 @@ test('ODY-158 review : nom ou chemin entre guillemets, substitution "$(...)" et 
   }
 });
 
-test('ODY-158 review : texte entre guillemets, nom de shell accolé et message de commit non refusés (Bash et PowerShell)', () => {
+test('ABC-158 review : texte entre guillemets, nom de shell accolé et message de commit non refusés (Bash et PowerShell)', () => {
   for (const c of [
     'echo "fix pwsh" "Remove-Item -Recurse ~"',
     'mypwsh \'Remove-Item -Recurse ~\'',
@@ -1034,8 +1034,8 @@ test('ODY-158 review : texte entre guillemets, nom de shell accolé et message d
   }
 });
 
-// ODY-158 review : 'pwsh ' répété 12 000 fois aussi décidé en moins de 200 ms (comme les entrées du point 2).
-test('ODY-158 review : "pwsh " répété 12 000 fois décidé en moins de 200 ms (Bash et PowerShell)', () => {
+// ABC-158 review : 'pwsh ' répété 12 000 fois aussi décidé en moins de 200 ms (comme les entrées du point 2).
+test('ABC-158 review : "pwsh " répété 12 000 fois décidé en moins de 200 ms (Bash et PowerShell)', () => {
   for (const input of [bash(sid(), 'pwsh '.repeat(12000)), pw('pwsh '.repeat(12000))]) {
     const t0 = performance.now();
     decide(input, C);
@@ -1044,39 +1044,39 @@ test('ODY-158 review : "pwsh " répété 12 000 fois décidé en moins de 200 ms
   }
 });
 
-// ODY-158 : un guillemet dans un commentaire n'ouvre aucune chaîne qui cache la commande (Bash et PowerShell).
-test("ODY-158 : pwsh caché derrière un commentaire à guillemet simple ou double refusé (Bash et PowerShell)", () => {
+// ABC-158 : un guillemet dans un commentaire n'ouvre aucune chaîne qui cache la commande (Bash et PowerShell).
+test("ABC-158 : pwsh caché derrière un commentaire à guillemet simple ou double refusé (Bash et PowerShell)", () => {
   for (const c of ["x # it's\npwsh 'Remove-Item -Recurse ~' # '", 'x # it"s\npwsh \'Remove-Item -Recurse ~\' # "']) {
     denied(decide(bash(sid(), c), C), DENY_MSG);
     denied(decide(pw(c), C), DENY_MSG);
   }
 });
 
-test("ODY-158 : pwsh après un commentaire <# #>, après une here-string @'...'@ (LF et CRLF) refusé (PowerShell)", () => {
+test("ABC-158 : pwsh après un commentaire <# #>, après une here-string @'...'@ (LF et CRLF) refusé (PowerShell)", () => {
   denied(decide(pw("x <# it's #> ; pwsh 'Remove-Item -Recurse ~' <# ' #>"), C), DENY_MSG);
   denied(decide(pw("$a = @'\nit's\n'@; pwsh 'Remove-Item -Recurse ~'; $b='"), C), DENY_MSG);
   denied(decide(pw("$a = @'\r\nit's\r\n'@\r\npwsh 'Remove-Item -Recurse ~'"), C), DENY_MSG);
 });
 
-test("ODY-158 : pwsh après $'\\'' (Bash) et $'pwsh' refusés, rm -rf ~ caché derrière $'\\'' refusé", () => {
+test("ABC-158 : pwsh après $'\\'' (Bash) et $'pwsh' refusés, rm -rf ~ caché derrière $'\\'' refusé", () => {
   denied(decide(bash(sid(), "echo $'\\''; pwsh 'Remove-Item -Recurse ~'; echo $'\\''"), C), DENY_MSG);
   denied(decide(bash(sid(), "echo $'\\''; rm -rf ~; echo $'\\''"), C), DENY_MSG);
   denied(decide(bash(sid(), "$'pwsh' 'Remove-Item -Recurse ~'"), C), DENY_MSG);
 });
 
-test("ODY-158 : rm ou Remove-Item -Recurse ~ derrière un commentaire à guillemet refusés (Bash et PowerShell)", () => {
+test("ABC-158 : rm ou Remove-Item -Recurse ~ derrière un commentaire à guillemet refusés (Bash et PowerShell)", () => {
   denied(decide(bash(sid(), "x # it's\nrm -rf ~ # '"), C), DENY_MSG);
   denied(decide(pw("x # it's\nRemove-Item -Recurse ~ # '"), C), DENY_MSG);
 });
 
-test("ODY-158 : commentaires, here-strings et $'...' sans commande dangereuse non refusés (Bash et PowerShell)", () => {
+test("ABC-158 : commentaires, here-strings et $'...' sans commande dangereuse non refusés (Bash et PowerShell)", () => {
   for (const c of ["echo ok # it's", 'git status # it"s', "echo $'a b'; git status"]) allowed(decide(bash(sid(), c), C));
   for (const c of ["Get-ChildItem # it's", "git status <# it's #>", "$a = @'\nit's\n'@"]) allowed(decide(pw(c), C));
 });
 
-// ODY-158 : 12 000 commentaires ou $' d'affilée, here-string non fermée (un seul masque), décidés en moins de 200 ms.
+// ABC-158 : 12 000 commentaires ou $' d'affilée, here-string non fermée (un seul masque), décidés en moins de 200 ms.
 // Les here-strings PowerShell ne sont testées qu'en PowerShell : en Bash, "'\n" fait autant de paires '...' à masquer.
-test("ODY-158 : commentaires, here-strings et $'...' répétés 12 000 fois décidés en moins de 200 ms (Bash et PowerShell)", () => {
+test("ABC-158 : commentaires, here-strings et $'...' répétés 12 000 fois décidés en moins de 200 ms (Bash et PowerShell)", () => {
   const timed = (input) => {
     const t0 = performance.now();
     decide(input, C);
@@ -1087,23 +1087,23 @@ test("ODY-158 : commentaires, here-strings et $'...' répétés 12 000 fois déc
   for (const s of ['# '.repeat(12000), "x # it's\n".repeat(12000), '<# '.repeat(12000), "@'\n".repeat(12000), "@'\n" + 'x '.repeat(6000) + "\n'@"]) timed(pw(s));
 });
 
-// ODY-158 review 3 : le parseur tient # après { ou = pour un commentaire ; a@' n'ouvre pas de here-string (A, B, C).
-test("ODY-158 review 3 : pwsh caché par # après { ou =, ou par @' après un mot, refusé (PowerShell)", () => {
+// ABC-158 review 3 : le parseur tient # après { ou = pour un commentaire ; a@' n'ouvre pas de here-string (A, B, C).
+test("ABC-158 review 3 : pwsh caché par # après { ou =, ou par @' après un mot, refusé (PowerShell)", () => {
   denied(decide(pw("& {#'\npwsh 'Remove-Item -Recurse ~'\n#'\n}"), C), DENY_MSG);
   denied(decide(pw("$a=#'\npwsh 'Remove-Item -Recurse ~'\n#'"), C), DENY_MSG);
   denied(decide(pw("echo a@'\nx'; pwsh 'Remove-Item -Recurse ~'\n'@"), C), DENY_MSG);
 });
 
-// ODY-158 review 4 : en PowerShell, # commente aussi juste après la fin d'un jeton ('a'#, $a#, ]#, >#, 1#).
-test("ODY-158 review 4 : pwsh caché par # collé à la fin d'un jeton, refusé (PowerShell)", () => {
+// ABC-158 review 4 : en PowerShell, # commente aussi juste après la fin d'un jeton ('a'#, $a#, ]#, >#, 1#).
+test("ABC-158 review 4 : pwsh caché par # collé à la fin d'un jeton, refusé (PowerShell)", () => {
   for (const pre of ["$a", "echo 'a'", 'echo "a"', 'echo ]', '$x[0]', 'echo a >x', '[int]1']) {
     denied(decide(pw(pre + "#'\npwsh 'Remove-Item -Recurse ~'\n#'"), C), DENY_MSG);
   }
   allowed(decide(pw('git commit -m "doc: pwsh \'Remove-Item -Recurse ~\' est refusé"'), C));
 });
 
-// ODY-158 review 3 : le masque guillemets seuls ne doit pas être quadratique (12 000 paires avec espaces, Bash et PowerShell).
-test("ODY-158 review 3 : 12 000 paires de guillemets avec espaces décidées en moins de 200 ms (Bash et PowerShell)", () => {
+// ABC-158 review 3 : le masque guillemets seuls ne doit pas être quadratique (12 000 paires avec espaces, Bash et PowerShell).
+test("ABC-158 review 3 : 12 000 paires de guillemets avec espaces décidées en moins de 200 ms (Bash et PowerShell)", () => {
   for (const s of ["'a b' ".repeat(12000), "'a\nb' ".repeat(12000)]) {
     for (const input of [bash(sid(), s), pw(s)]) {
       const t0 = performance.now();
@@ -1114,9 +1114,9 @@ test("ODY-158 review 3 : 12 000 paires de guillemets avec espaces décidées en 
   }
 });
 
-// ODY-162 : sauts de ligne suivis de guillemets (30 000 fois) et paires de guillemets avec espaces (24 000 fois),
+// ABC-162 : sauts de ligne suivis de guillemets (30 000 fois) et paires de guillemets avec espaces (24 000 fois),
 // décidés en moins de 200 ms (Bash et PowerShell).
-test('ODY-162 : "\\n\\"a" répété 30 000 fois et "\\"a b\\" " répété 24 000 fois décidés en moins de 200 ms (Bash et PowerShell)', () => {
+test('ABC-162 : "\\n\\"a" répété 30 000 fois et "\\"a b\\" " répété 24 000 fois décidés en moins de 200 ms (Bash et PowerShell)', () => {
   for (const s of ['\n"a'.repeat(30000), '"a b" '.repeat(24000)]) {
     for (const input of [bash(sid(), s), pw(s)]) {
       const t0 = performance.now();

@@ -119,6 +119,7 @@ test('checksGreen : résumé, dernier résumé de --watch, JSON, tabulations, au
   assert.strictEqual(checksGreen(RED), false);
   assert.strictEqual(checksGreen({ stdout: 'Some checks are still pending\n...\nAll checks were successful' }), true);
   assert.strictEqual(checksGreen({ stdout: '[{"name":"t","bucket":"pass"},{"name":"l","bucket":"skipping"}]' }), true);
+  assert.strictEqual(checksGreen({ stdout: '[{"name":"t","state":"SKIPPED"},{"name":"l","state":"NEUTRAL"}]' }), true);
   assert.strictEqual(checksGreen({ stdout: '[{"name":"t","bucket":"fail"}]' }), false);
   assert.strictEqual(checksGreen({ stdout: 'test\tpass\t1m\turl\nlint\tfail\t2s\turl' }), false);
   assert.strictEqual(checksGreen({ stdout: '', stderr: "no checks reported on the 'x' branch" }), true);

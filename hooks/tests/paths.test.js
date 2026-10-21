@@ -11,8 +11,8 @@ const { run, statePath } = require('../context-budget.js');
 const { rappelFor, RAPPEL } = require('../model-router.js');
 const { defaultSettingsPath } = require('../model-check.js');
 
-const CWD = 'C:\\Users\\grego\\Projets\\laststream';
-const SLUG = 'c-users-grego-projets-laststream';
+const CWD = 'C:\\dev\\app';
+const SLUG = 'c-dev-app';
 const dirs = [];
 
 function tmp() {

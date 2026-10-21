@@ -71,7 +71,7 @@ function checksGreen(response) {
   if (trimmed.startsWith('[')) {
     try {
       const list = JSON.parse(trimmed);
-      if (Array.isArray(list)) return list.every((c) => /^(pass|skipping|success)$/i.test(String(c && (c.bucket || c.state))));
+      if (Array.isArray(list)) return list.every((c) => /^(pass|skipping|skipped|success|neutral)$/i.test(String(c && (c.bucket || c.state))));
     } catch (e) { /* format inconnu */ }
   }
   if (/\t(?:fail|pending|cancel)\b/i.test(text)) return false;

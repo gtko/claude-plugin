@@ -1,5 +1,5 @@
 'use strict';
-// ODY-131 : dispatcher des hooks. Ordre, arret au premier refus, fail-open par module, matcher,
+// ABC-131 : dispatcher des hooks. Ordre, arret au premier refus, fail-open par module, matcher,
 // sortie identique a l'appel direct (un cas par evenement).
 const test = require('node:test');
 const assert = require('node:assert');
@@ -195,7 +195,7 @@ test('identique au direct, PreToolUse : refus tool-guard (rm -rf /)', () => {
 });
 
 test('identique au direct, UserPromptSubmit : rappel [Routage] (model-router seul, context-budget muet)', () => {
-  const stdin = JSON.stringify({ session_id: 'ody131-direct', prompt: 'salut' });
+  const stdin = JSON.stringify({ session_id: 'abc131-direct', prompt: 'salut' });
   const direct = run([hookFile('model-router.js')], stdin, tmpHome());
   const via = run([DISPATCH, 'UserPromptSubmit'], stdin, tmpHome());
   assert.match(direct.stdout, /\[Routage\]/);
@@ -208,8 +208,8 @@ test('identique au direct, SessionStart : passation injectee (handoff seul)', ()
   const cwd = path.join(home, 'projet');
   const file = withHome(home, () => handoffPath(cwd, loadConfig()));
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, '# Passation test\nReste a faire : ODY-131 dispatch\n');
-  const stdin = JSON.stringify({ session_id: 'ody131-start', source: 'startup', cwd });
+  fs.writeFileSync(file, '# Passation test\nReste a faire : ABC-131 dispatch\n');
+  const stdin = JSON.stringify({ session_id: 'abc131-start', source: 'startup', cwd });
   const direct = run([hookFile('handoff.js')], stdin, home);
   const via = run([DISPATCH, 'SessionStart'], stdin, home);
   assert.match(direct.stdout, /Passation test/);
@@ -219,7 +219,7 @@ test('identique au direct, SessionStart : passation injectee (handoff seul)', ()
 
 test('identique au direct, PreCompact : meme exit et meme passation ecrite (pre-compact seul)', () => {
   const cwd = path.join(tmpHome(), 'projet');
-  const stdin = JSON.stringify({ session_id: 'ody131-compact', cwd, transcript_path: path.join(cwd, 'absent.jsonl') });
+  const stdin = JSON.stringify({ session_id: 'abc131-compact', cwd, transcript_path: path.join(cwd, 'absent.jsonl') });
   const homeDirect = tmpHome();
   const homeVia = tmpHome();
   const direct = run([hookFile('pre-compact.js')], stdin, homeDirect);
@@ -246,7 +246,7 @@ test('CLI : PreToolUse lu une seule fois sur stdin, refus restitue', () => {
   assert.match(r.stdout, /\[routing-guard\]/);
 });
 
-// ODY-134 : plugin gtko-agents actif -> la copie legacy (sans CLAUDE_PLUGIN_ROOT) sort sans lancer les hooks.
+// ABC-134 : plugin gtko-agents actif -> la copie legacy (sans CLAUDE_PLUGIN_ROOT) sort sans lancer les hooks.
 const REFUS_ROUTING = JSON.stringify({ tool_name: 'Agent', tool_input: { subagent_type: 'general-purpose', prompt: 'x' } });
 
 // CLAUDE_CONFIG_DIR isole (settings.json optionnel) ; CLAUDE_PLUGIN_ROOT retire sauf si pluginRoot.

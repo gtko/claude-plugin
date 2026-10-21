@@ -10,7 +10,7 @@ const { handoffPath } = require('../handoff.js');
 
 const HOOK = path.join(__dirname, '..', 'context-budget.js');
 const CONFIG_FILE = path.join(__dirname, '..', 'hooks-config.json');
-const CWD = 'C:\\Users\\grego\\Projets\\laststream';
+const CWD = 'C:\\dev\\app';
 const GENERIC = '/compact garde : issue en cours, branche et worktree, décisions, reste à faire, agents en cours';
 
 function tmpRoot() {
