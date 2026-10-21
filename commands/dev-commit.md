@@ -1,13 +1,13 @@
 ---
-description: "Commit et push des changements lies a une issue"
+description: "Commit et push des changements lies a une issue, apres la gate locale (tests et lint)"
 argument-hint: "Identifiant de l'issue Linear (ex: MVP-42) ou message de commit"
 allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git push:*), Bash(git diff:*), Bash(git log:*), Bash(npm run build:*), Bash(npm run lint:*), Bash(npm test:*), AskUserQuestion
 ---
 
 # Commit et Push
 
-Commit et push les changements en cours, lies a l'issue Linear.
-**Inclut une phase de test interactive avant le commit.**
+Commit et push les changements en cours, lies a l'issue Linear (skill `livraison`, etapes 5 et 6). La review independante se fait ensuite sur la PR (`/dev-review`).
+**Inclut une gate locale bloquante (tests et lint) et une phase de test interactive informative.**
 
 ## Contexte
 
@@ -23,14 +23,13 @@ Commit et push les changements en cours, lies a l'issue Linear.
 - Verifier qu'aucun fichier sensible n'est inclus (.env, credentials, etc.)
 - Grouper les changements par theme si necessaire
 
-### 2. Tests automatises
-Lance en parallele :
-- `npm run build` pour verifier la compilation
-- `npm run lint` pour le linting
+### 2. Gate locale (bloquante)
+Commandes du contrat `.claude/dw.json` (`commands.check`, `commands.build`), sinon celles de la doc du depot. Par defaut, en parallele :
+- les tests (`npm test`)
+- le lint (`npm run lint`)
+- le build (`npm run build`) s'il existe
 
-Si des tests existent, lance aussi `npm test`.
-
-Presente les resultats. Si un test echoue, informe l'utilisateur et propose de corriger avant de continuer.
+Code de sortie lu, sortie lue. Un echec bloque le push et la PR : corriger d'abord (agent `haiku-builder`), puis relancer la gate. Une commande absente se dit dans la PR.
 
 ### 3. Dogfood automatise (test dans le navigateur)
 
@@ -43,7 +42,7 @@ Utilise le skill `/dogfood` pour tester l'app automatiquement dans Chrome.
 
 **Boucle de correction :**
 - Si bugs critiques detectes :
-  1. Lance un agent `implementer` pour corriger
+  1. Lance un agent `haiku-builder` pour corriger
   2. Re-lance le dogfood
   3. Max 3 iterations, puis escalade a l'utilisateur
 - Bugs mineurs/UX : notes pour la PR, pas de blocage
@@ -82,32 +81,32 @@ options: [generees dynamiquement, exemples:]
 - Format : Conventional Commits en francais
 - Structure :
   ```
-  type(scope): description courte
+  type(scope): description courte (<CLE>-XXXX)
 
   Description detaillee si necessaire.
 
-  Ref: MVP-XX
-  Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>
+  Ref: <CLE>-XXXX
+  <trailer Co-Authored-By prescrit par la session>
   ```
 - Types : feat, fix, refactor, chore, docs, test, style
-- Toujours inclure la reference a l'issue Linear
+- Toujours inclure l'identifiant de l'issue Linear dans le titre ; jamais `--no-verify`
 
 ### 6. Stage et commit
 - `git add` des fichiers pertinents (pas de `git add .` aveugle)
 - Creer le commit avec le message construit
 - Verifier que le commit a reussi
 
-### 7. Push
+### 7. Push (gate locale verte)
 - `git push origin <branche>` (avec `-u` si premiere fois)
-- Verifier que le push a reussi
+- Verifier que le push a reussi, puis consulter la CI (`gh pr checks <pr> --watch`) si une PR existe deja ; echec d'infra : `gh run rerun <id> --failed` sans toucher au code
 
 ### 8. Mettre a jour Linear
-- Ajouter un commentaire sur l'issue avec le resume des changements
-- Si tous les criteres d'acceptation sont remplis, mettre a jour le statut
+- Ajouter un commentaire sur l'issue avec le resume des changements (connecteur MCP Linear `save_comment`)
+- Statut : `In Progress` pendant le travail, `In Review` quand la PR est prete ; jamais `Done` sans merge effectif
 
 ## Notes
 
 - Si les changements sont trop importants pour un seul commit, proposer un decoupage
 - Ne jamais forcer le push (--force) sans demander explicitement
 - Si un hook pre-commit echoue, corriger et refaire un nouveau commit
-- La phase de test est informative, pas bloquante - l'utilisateur decide toujours
+- La gate locale (tests, lint, build) est bloquante ; le dogfood et la checklist manuelle sont informatifs et vont dans le plan de test de la PR

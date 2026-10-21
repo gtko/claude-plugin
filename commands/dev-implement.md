@@ -5,7 +5,7 @@ argument-hint: "Identifiant de l'issue Linear (ex: MVP-42)"
 
 # Implementation d'une issue
 
-Lance des agents specialises (custom + built-in) pour implementer l'issue Linear specifiee.
+Lance les agents du graphe gtko pour implementer l'issue Linear specifiee (skill `livraison`, etapes 1 a 7). Prerequis : issue reprise ou creee avec ses criteres en checklist, branche liee a l'issue, issue en `In Progress` (sinon `/dev-branch` d'abord).
 
 ## Contexte
 
@@ -15,23 +15,20 @@ Lance des agents specialises (custom + built-in) pour implementer l'issue Linear
 
 ## Agents disponibles
 
-### Agents custom du projet
-- **`implementer`** : Dev senior, implementation avec Write/Edit/Bash
-- **`fr-reviewer`** : Review en francais, Read-only
-- **`linear-planner`** : Planification et decoupage
-
-### Subagent types built-in
-- **`feature-dev:code-explorer`** : Exploration profonde du codebase
-- **`feature-dev:code-architect`** : Design d'architecture avec blueprint
-- **`feature-dev:code-reviewer`** : Review technique detaillee
+Seuls les agents du graphe sont admis (le hook routing-guard refuse les agents d'autres plugins) :
+- **`haiku-scout`** : exploration, lecture, synthese (lecture seule)
+- **`opus-advisor`** : plan, architecture, review independante 4 axes (lecture seule)
+- **`haiku-builder`** : implementation par defaut ; `sonnet-builder` (`ESCALADE:` / `DIRECT:`), `opus-builder` (`OPUS:`, gros blocs UI)
+- **`linear-planner`** : decoupage ; **`fr-reviewer`** : review en francais
 
 ## Phase 1 : Recuperation du contexte
 
 **Actions :**
-1. Utilise `linear issue view MVP-XX` pour recuperer :
-   - Titre et description de l'issue
-   - Plan d'implementation (dans la description)
+1. Connecteur MCP Linear `get_issue` et `list_comments` pour recuperer :
+   - Titre, description et criteres d'acceptation de l'issue
+   - Plan d'implementation (dans la description) et commentaires qui precisent le besoin
    - Sous-taches eventuelles
+   - Verifier que l'issue est `In Progress` et que la branche courante porte son identifiant
 2. Identifie les fichiers et zones du code concernes
 3. Presente un resume a l'utilisateur
 
@@ -39,11 +36,11 @@ Lance des agents specialises (custom + built-in) pour implementer l'issue Linear
 
 **IMPORTANT** : Lance ces agents en parallele dans le meme message (plusieurs `Agent` tool calls) :
 
-1. **Agent `feature-dev:code-explorer`** (subagent built-in) :
-   - Prompt : "Explore l'architecture de ce projet Next.js. Identifie les patterns, conventions de nommage, structure des composants, patterns de routing, et utilitaires reutilisables. Focus sur [zone impactee par l'issue]."
-   - Objectif : comprendre les patterns existants
+1. **Agent `haiku-scout`** :
+   - Prompt : "Explore l'architecture du projet et sa doc (CONTRIBUTING.md, CLAUDE.md, docs/, ADR). Identifie les patterns, conventions, regles de code, chemins geles et utilitaires reutilisables. Focus sur [zone impactee par l'issue]. Synthese en 10 lignes."
+   - Objectif : comprendre les patterns et les regles existants
 
-2. **Agent `feature-dev:code-explorer`** (subagent built-in) :
+2. **Agent `haiku-scout`** :
    - Prompt : "Identifie tous les fichiers qui seront impactes par [description de l'issue]. Trace les dependances, les imports, et les composants lies."
    - Objectif : mapper les fichiers a modifier
 
@@ -60,18 +57,17 @@ Lance des agents specialises (custom + built-in) pour implementer l'issue Linear
 ## Phase 3 : Design d'architecture (si complexe)
 
 **Actions :**
-1. Lance un agent `feature-dev:code-architect` (subagent built-in) :
-   - Prompt : "Design l'architecture pour implementer [issue] dans ce codebase Next.js. Voici le contexte : [resultats phase 2]. Propose un blueprint avec les fichiers a creer/modifier, les composants, les data flows."
-2. Presente la proposition a l'utilisateur
-3. Attend la validation avant de continuer
+1. Lance un agent `opus-advisor` :
+   - Prompt : "Plan d'implementation de [issue] dans ce codebase. Contexte : [resultats phase 2]. Lots verifiables, agent recommande, fichiers a creer/modifier, criteres de reussite."
+2. Decision d'architecture majeure : presente la proposition et attends la validation ; sinon continuer
 
 ## Phase 4 : Implementation
 
 **Actions :**
-1. Lance un agent `implementer` (agent custom) avec le plan valide :
-   - Prompt : "Implemente selon ce plan : [plan]. Contexte du codebase : [resultats exploration]. Conventions a respecter : [patterns identifies]."
+1. Lance un agent `haiku-builder` avec le plan :
+   - Prompt : "Implemente selon ce plan : [plan]. Contexte du codebase : [resultats exploration]. Conventions et regles a respecter : [patterns, chemins geles, doc qui fait foi]. Bug : test de regression rouge d'abord. Critere de reussite : [tests et lint verts]."
 2. Pour les implementations parallelisables (fichiers independants) :
-   - Peut lancer plusieurs agents `implementer` en parallele
+   - Peut lancer plusieurs agents `haiku-builder` en parallele (un worktree par lot)
    - Chaque agent travaille sur un sous-ensemble de fichiers
 3. Respecte strictement les conventions du projet
 4. Informe l'utilisateur de la progression a chaque etape significative
@@ -80,14 +76,15 @@ Lance des agents specialises (custom + built-in) pour implementer l'issue Linear
 
 **IMPORTANT** : Lance ces agents de validation en parallele :
 
-1. **Agent `feature-dev:code-reviewer`** (subagent built-in) :
-   - Prompt : "Review les changements suivants : [liste fichiers modifies]. Cherche bugs, problemes de securite, performance, et coherence avec le reste du codebase."
+0. **Gate locale** : tests ET lint (et build ou `commands.check`), verts avant la review.
 
-2. **Agent `fr-reviewer`** (agent custom) :
+1. **Agent `fr-reviewer`** (controle rapide avant la PR, si utile) :
    - Prompt : "Review en francais les fichiers suivants : [liste]. Produis un rapport avec le scoring de confiance."
 
-**Synthese** : Combine les deux rapports et :
-- Corrige les problemes critiques identifies (confiance >= 80%)
+La review independante qui fait foi se fait **sur la PR** (`/dev-pr` puis `/dev-review`, opus-advisor 4 axes).
+
+**Synthese** :
+- Corrige les problemes critiques identifies
 - Presente un recapitulatif :
   - Fichiers crees/modifies
   - Decisions techniques prises
@@ -101,4 +98,6 @@ Lance des agents specialises (custom + built-in) pour implementer l'issue Linear
 - Si un blocage technique survient, expliquer et proposer des alternatives
 - Ne pas over-engineer : implementer le minimum necessaire
 - Mettre a jour les sous-taches Linear au fur et a mesure
+- Bug repere hors du perimetre : issue separee, pas de correction dans cette branche
+- Suite : `/dev-commit`, puis `/dev-pr` (PR, CI, retours) ; jamais de merge
 - Toujours lancer les agents independants en parallele pour gagner du temps

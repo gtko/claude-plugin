@@ -1,53 +1,41 @@
 ---
-description: "Demander et executer le merge d'une PR apres validation"
+description: "Verifier qu'une PR est prete a merger et la remettre a l'humain (le merge reste un geste humain)"
 argument-hint: "Numero de PR (optionnel)"
-allowed-tools: Bash(gh pr merge:*), Bash(gh pr view:*), Bash(git checkout:*), Bash(git pull:*), Bash(git branch:*)
+allowed-tools: Bash(gh pr view:*), Bash(gh pr checks:*), Bash(git fetch:*), Bash(git branch:*), Bash(git merge-base:*)
 ---
 
-# Merge de Pull Request
+# Preparation du merge
 
-Finalise le processus en demandant la validation pour merger la PR.
+Verifie que la PR est prete et la remet a l'humain. **Le merge est un geste humain** (regle Dotworld) : l'agent ne lance pas `gh pr merge`, et le hook process-gate le refuse tant que `processGate.agentMerge` n'est pas `true`. Sur un depot Dotworld a contrat, le seul merge par agent passe par `/dw:ship --auto-merge`, demande explicitement par l'humain, si le contrat l'autorise.
 
 ## Contexte
 
 - Argument : $ARGUMENTS
 - Branche actuelle : !`git branch --show-current`
-- PR : !`gh pr view --json number,title,url,state,reviewDecision,mergeable 2>/dev/null || echo "Pas de PR"`
+- PR : !`gh pr view --json number,title,url,state,reviewDecision,mergeable,mergeStateStatus 2>/dev/null || echo "Pas de PR"`
 
 ## Workflow
 
-1. **Verifier l'etat de la PR**
-   - La PR est-elle approuvee ?
-   - Y a-t-il des commentaires non resolus ?
-   - Les checks CI passent-ils ?
-   - Y a-t-il des conflits ?
+1. **Mesurer l'etat de la PR**
+   - Review independante OK postee apres le dernier commit (`<!-- review-4-axes -->` ou `<!-- review-rapide -->`, ou GREEN `/dw:review`)
+   - Commentaires de la PR et de l'issue Linear traites (aucun bloquant sans commit ni reponse)
+   - CI : `gh pr checks <pr>` vert, consulte apres le dernier push
+   - Branche a jour avec la base (`mergeStateStatus` different de `BEHIND`), sans conflit
 
 2. **Presenter le statut a l'utilisateur**
    ```
    PR #XX : [titre]
-   - Statut : [approuvee/en attente/changements demandes]
-   - Commentaires non resolus : X
-   - Checks CI : [pass/fail/pending]
-   - Conflits : [oui/non]
+   - Review : [OK / manquante / perimee]
+   - Retours ouverts : X
+   - Checks CI : [pass / fail / pending]
+   - A jour avec la base : [oui / non]
    ```
 
-3. **Demander confirmation**
-   - Si tout est OK : "La PR est prete a etre mergee. Je merge ?"
-   - Si problemes : "Il reste des points a traiter avant le merge : [liste]"
-   - Proposer le type de merge : squash (recommande), merge commit, rebase
+3. **Selon l'etat**
+   - Points restants : les lister, et proposer de les traiter (`/dev-fix-review`, CI, merge de la base)
+   - Tout est pret : commentaire Linear « PR #XX prete (review OK, retours traites, CI verte), en attente de merge », issue en `In Review` si elle n'y est pas deja, puis remettre la PR a l'humain avec son URL
 
-4. **Executer le merge** (uniquement apres confirmation explicite)
-   - `gh pr merge --squash` (ou autre selon le choix)
-   - Verifier que le merge a reussi
-
-5. **Nettoyage**
-   - Revenir sur la branche principale : `git checkout main/master`
-   - Mettre a jour : `git pull`
-   - Proposer de supprimer la branche locale
-
-6. **Mettre a jour Linear**
-   - Passe l'issue en "Done" via `linear issue update MVP-XX --status "Done"`
-   - Ajoute un commentaire : "PR mergee. Issue terminee."
-
-7. **Confirmation finale**
-   - "Issue MVP-XX terminee et PR #XX mergee avec succes !"
+4. **Apres un merge fait par l'humain** (sur demande)
+   - Verifier `gh pr view <pr> --json state` = `MERGED`
+   - Issue Linear : `Fixes <CLE>-XXXX` l'a normalement passee en `Done` ; sinon la passer en `Done` avec un commentaire (PR, merge commit)
+   - Retour sur la base a jour (`git switch main && git pull --ff-only`), suppression de la branche locale proposee

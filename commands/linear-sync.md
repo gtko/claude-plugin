@@ -1,69 +1,54 @@
 ---
-description: "Synchronisation Linear : chercher/creer une issue, planifier, decouper en sous-taches"
+description: "Synchronisation Linear : chercher une issue existante (pas de doublon), sinon la creer avec ses criteres en checklist, planifier, decouper"
 argument-hint: "Description de la fonctionnalite ou de la tache"
 ---
 
 # Synchronisation Linear
 
-Tu geres la synchronisation avec Linear pour la team **MVP** de l'organisation **dotworld-sarl**.
-Pas de projet par défaut : applique la règle « Classement Linear » du skill `livraison`.
+Tu geres l'issue Linear de la demande (skill `livraison`, etape 2, regles Dotworld de `/dw:ticket`).
 
-Toutes les communications (titres, descriptions, commentaires) sont en **francais**.
+- **Equipe** : celle du contrat `.claude/dw.json` (`linear.teamName`), sinon celle que nomme la doc du depot ; aucune des deux : demander.
+- **Outils** : connecteur MCP Linear (`mcp__claude_ai_Linear__*`, ou `mcp__<uuid>__*` charge par `ToolSearch` dans Claude Desktop) : `list_issues`, `get_issue`, `list_comments`, `save_issue`, `save_comment`, `list_projects`. La CLI `linear` seulement si aucun connecteur n'est disponible.
+- Titres, descriptions et commentaires en **francais**.
 
 ## Contexte
 
 Demande utilisateur : $ARGUMENTS
 
-## Phase 1 : Recherche d'issue existante
+## Phase 1 : Recherche d'issue existante (toujours d'abord)
 
-**Actions :**
-1. Utilise ``linear team list`` pour recuperer la team **MVP**
-2. Utilise ``linear issue list --team MVP`` pour chercher si une issue similaire existe deja dans la team
-3. Si une issue existe :
-   - Affiche-la a l'utilisateur avec son statut, son identifiant et sa description
-   - Demande confirmation : "C'est bien cette issue ? Ou je dois en creer une nouvelle ?"
-4. Si aucune issue ne correspond :
-   - Informe l'utilisateur qu'aucune issue n'a ete trouvee
-   - Passe a la Phase 2
+1. `list_issues` dans l'equipe, sur plusieurs mots-cles du sujet (ecran, composant, symptome) et sur tout identifiant cite dans la demande
+2. Lire les candidates (`get_issue`, `list_comments`)
+3. Une issue couvre le sujet : la **reprendre**, ne pas en creer de seconde
+   - L'afficher (identifiant, statut, description, commentaires utiles)
+   - Sans criteres d'acceptation en checklist : ajouter a sa description une section `## Criteres d'acceptation` (`- [ ] ...`), sans toucher au reste ni au perimetre, et le dire en commentaire, s'ils se deduisent de la demande, de l'issue et de ses commentaires ; sinon les demander
+   - Ligne `Criteres a preciser :` : stop, demander les criteres
+4. Une issue proche mais distincte : creer la nouvelle et les lier (`relatedTo`)
+5. Aucune issue : Phase 2
 
 ## Phase 2 : Creation de l'issue
 
-**Actions :**
-1. Redige un titre clair et concis en francais
-2. Redige une description structuree en francais avec :
-   - **Contexte** : pourquoi cette tache
-   - **Objectif** : ce qu'on veut accomplir
-   - **Criteres d'acceptation** : liste des conditions de validation
-3. Presente le brouillon a l'utilisateur pour validation
-4. Utilise ``linear issue create` ou `linear issue update`` pour creer l'issue dans la team MVP
-5. Affiche l'identifiant de l'issue creee (ex: MVP-42)
+1. Titre court, qui decrit le livrable
+2. Description structuree :
+   - **Contexte** en 1 a 3 phrases (faits, references, fichiers)
+   - `## A faire` : actions convenues
+   - `## Criteres d'acceptation` **en checklist** `- [ ] ...`, testables, derives de la demande, jamais inventes ; non deductibles : les demander
+   - `## Hors perimetre` si quelque chose est exclu
+3. Champs : priorite seulement si la demande en fixe une ; label seulement parmi `linear.labels` du contrat, sans contrat aucun, **jamais de label cree** ; projet seulement s'il est nomme (demande ou `linear.projectAliases`)
+4. Creer l'issue (`save_issue`) sans redemander quand la demande est claire ; afficher l'identifiant cree (ex. MVP-42)
 
 ## Phase 3 : Planification et decoupe
 
-**Actions :**
-1. Analyse la complexite de la tache
-2. Si la tache est simple (estimee < 2h de dev) :
-   - Ajoute un plan d'implementation dans la description de l'issue
-   - Informe l'utilisateur : "Tache simple, pas besoin de sous-taches"
-3. Si la tache est complexe :
-   - Propose une decoupe en sous-taches (3-7 sous-taches max)
-   - Chaque sous-tache avec : titre, description courte, estimation relative
-   - Demande validation a l'utilisateur
-   - Cree les sous-taches avec ``linear issue create` ou `linear issue update`` en les liant a l'issue parente
-4. Met a jour l'issue parente avec le plan via ``linear issue create` ou `linear issue update``
+1. Tache simple : plan d'implementation ajoute a la description
+2. Tache complexe : agent `linear-planner` pour une decoupe en 3 a 7 sous-issues independamment testables, chacune avec ses criteres ; confirmer le decoupage avec l'utilisateur avant de creer plusieurs issues, puis les creer liees a l'issue parente
 
 ## Phase 4 : Confirmation
 
-**Actions :**
-1. Affiche un recapitulatif :
-   - Issue principale : ID + titre
-   - Sous-taches (si applicable) : IDs + titres
-   - Statut : prete pour implementation
-2. Retourne l'identifiant de l'issue principale pour les etapes suivantes
+1. Recapitulatif : issue principale (identifiant, titre, reprise ou creee), sous-issues eventuelles, champs poses
+2. Suite du process : branche liee a l'issue et passage en `In Progress` avant la premiere modification de code (`/dev-branch`)
 
 ## Notes importantes
 
-- Toujours demander confirmation avant de creer quoi que ce soit
+- Doublons d'abord : une issue existante se reprend ou se complete, jamais de doublon
+- Un bug repere hors du perimetre de la tache : issue separee, liee par `relatedTo`
 - Si l'utilisateur corrige un titre ou une description, appliquer immediatement
-- Utiliser les labels existants du projet quand c'est pertinent
-- Estimer la priorite en fonction de la description (urgent, haute, moyenne, basse)
