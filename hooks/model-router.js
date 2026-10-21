@@ -11,7 +11,7 @@ const { stateDirOf, loadConfig } = require('./handoff.js');
 
 // Une seule ligne : le detail des regles est dans ~/.claude/CLAUDE.md et le skill livraison.
 const RAPPEL =
-  "[Routage] Delegue selon CLAUDE.md (haiku-builder par defaut, gtko-agents:haiku-builder en mode plugin), parallelise au maximum (lots independants dans le meme message) ; plan/decision/review -> opus-advisor (gtko-agents:opus-advisor en mode plugin) ; modification de code -> skill livraison (gtko-agents:livraison en mode plugin), charge AVANT la premiere edition : issue Linear reprise ou creee puis In Progress, branche liee, tests et lint, review par un sous-agent, PR Fixes <ID>, CI apres chaque push, commentaires PR et Linear traites, In Review, jamais de merge.";
+  "[Routage] Delegue selon CLAUDE.md (haiku-builder par defaut, gtko-agents:haiku-builder en mode plugin), parallelise au maximum (lots independants dans le meme message) ; plan/decision/review -> opus-advisor (gtko-agents:opus-advisor en mode plugin) ; modification de code -> skill livraison (gtko-agents:livraison en mode plugin), charge AVANT la premiere edition : issue Linear reprise ou creee puis In Progress, branche liee, tests et lint, review par un sous-agent, PR Fixes <ID>, CI verifiee apres chaque push par un gh pr checks dans un appel separe (jamais dans la meme commande ni le meme lot que le push), un refus de hook ne stoppe pas le process (appliquer son alternative), commentaires PR et Linear traites, In Review, jamais de merge.";
 
 // Chemin de l'etat ; identifiant de session assaini (meme regle que context-budget.js).
 function routerStatePath(stateDir, sessionId) {

@@ -22,11 +22,13 @@ function frontmatterModel(name, cwd) {
   for (const d of dirs) {
     const f = path.join(d, name + '.md');
     if (!fs.existsSync(f)) continue;
+    // Agent fourni par le depot (.claude/agents du projet), pas par le plugin ni par l'utilisateur.
+    const project = Boolean(cwd) && d === dirs[0];
     const txt = fs.readFileSync(f, 'utf8');
     const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(txt);
-    if (!fm) return { found: true, model: null };
+    if (!fm) return { found: true, model: null, project };
     const m = /^model:\s*(.+?)\s*$/m.exec(fm[1]);
-    return { found: true, model: m ? m[1].replace(/^["']|["']$/g, '') : null };
+    return { found: true, model: m ? m[1].replace(/^["']|["']$/g, '') : null, project };
   }
   return { found: false };
 }
@@ -85,10 +87,14 @@ function decide(input) {
   }
   if (UTILITY.includes(type) || KNOWN_FIXED_MODEL.includes(type)) return null;
 
-  // Agent inconnu : refuser s'il herite du modele (Opus) d'apres son frontmatter.
+  // Agent inconnu : refuser s'il herite du modele (Opus) d'apres son frontmatter. Un agent du depot sans model:
+  // (ou model: inherit) passe : il suit le modele de la session ; un model: opus explicite reste refuse.
+  // Un model: explicite non-Opus passe a l'appel (l'override opus est refuse plus haut) leve le risque d'heritage.
+  if (model) return null;
   const fm = frontmatterModel(type, input.cwd);
+  if (fm.found && fm.project && (!fm.model || fm.model === 'inherit')) return null;
   if (fm.found && (!fm.model || fm.model === 'inherit' || fm.model.toLowerCase().includes('opus'))) {
-    return 'L\'agent "' + type + '" herite du modele d\'Opus (pas de model: dans son frontmatter). Utilise haiku-builder / haiku-scout ou fixe son model:.';
+    return 'L\'agent "' + type + '" herite du modele d\'Opus (pas de model: dans son frontmatter). Relance-le avec model: "sonnet", ou utilise l\'agent du graphe equivalent : relecture -> sonnet-reviewer ou opus-advisor, code -> haiku-builder, exploration -> haiku-scout. Ne t\'arrete pas sur ce refus.';
   }
   return null;
 }

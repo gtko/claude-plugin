@@ -12,5 +12,5 @@ Argument : $ARGUMENTS — skill `livraison`, etapes 5 et 6. Branche : !`git bran
 2. **Dogfood** (app web) : serveur de dev lance, skill `dogfood` sur les pages touchees ; bugs critiques → `haiku-builder`, 3 iterations max puis l'utilisateur ; bugs mineurs → plan de test de la PR.
 3. **Checklist manuelle** : `AskUserQuestion` (`multiSelect`, 2 a 4 items que le dogfood n'a pas pu verifier : ressenti UX, donnees reelles, device). Informative, non bloquante ; le resultat va au plan de test.
 4. **Commit** : `type(scope): description (<CLE>-XXXX)` en francais, corps Avant / Apres, trailer `Co-Authored-By` de la session ; `git add` cible, jamais `--no-verify`.
-5. **Push**, puis si une PR existe : `gh pr checks <pr> --watch` (echec d'infra : `gh run rerun <id> --failed`, sans toucher au code) et `/dev-fix-review`.
+5. **Push**, puis, le push termine et si une PR existe : `gh pr checks <pr> --watch` dans un appel separe (echec d'infra : `gh run rerun <id> --failed`, sans toucher au code) et `/dev-fix-review`.
 6. Commentaire de suivi sur l'issue (`save_comment`) ; jamais `Done` sans merge.

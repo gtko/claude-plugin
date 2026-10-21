@@ -108,3 +108,53 @@ test('haiku-tools : proxy pour Sonnet/Opus, interdit depuis Haiku', () => {
   denied(call({ subagent_type: 'haiku-tools', prompt: 'x' }, sub('haiku-builder')));
   denied(call({ subagent_type: 'haiku-tools', prompt: 'x' }, sub('haiku-scout')));
 });
+
+test('agent du dépôt (.claude/agents du projet) sans model: ou model: inherit : admis ; model: opus explicite refusé', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const repo = fs.mkdtempSync(path.join(os.tmpdir(), 'rg-repo-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rg-home-'));
+  const prev = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = home;
+  try {
+    const write = (dir, name, fm) => {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, name + '.md'), `---\nname: ${name}\n${fm}---\nCorps.\n`);
+    };
+    const agents = path.join(repo, '.claude', 'agents');
+    write(agents, 'reviewer', 'description: relecteur du projet\n');
+    write(agents, 'heriteur', 'model: inherit\n');
+    write(agents, 'gros', 'model: opus\n');
+    write(path.join(home, 'agents'), 'perso', 'description: agent utilisateur sans model\n');
+    allowed(call({ subagent_type: 'reviewer', prompt: 'Relis' }, { cwd: repo }));
+    allowed(call({ subagent_type: 'heriteur', prompt: 'x' }, { cwd: repo }));
+    denied(call({ subagent_type: 'gros', prompt: 'x' }, { cwd: repo }));
+    denied(call({ subagent_type: 'perso', prompt: 'x' }, { cwd: repo }));
+    denied(call({ subagent_type: 'reviewer', model: 'opus', prompt: 'x' }, { cwd: repo }));
+  } finally {
+    if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = prev;
+    fs.rmSync(repo, { recursive: true, force: true });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});
+
+test('run ex01 : agent hors graphe sans model: mais appelé avec model: "sonnet" : admis ; message de refus avec alternative', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'rg-home-'));
+  const prev = process.env.CLAUDE_CONFIG_DIR;
+  process.env.CLAUDE_CONFIG_DIR = home;
+  try {
+    fs.mkdirSync(path.join(home, 'agents'), { recursive: true });
+    fs.writeFileSync(path.join(home, 'agents', 'perso.md'), '---\nname: perso\n---\nCorps.\n');
+    allowed(call({ subagent_type: 'perso', model: 'sonnet', prompt: 'Relis le diff' }));
+    allowed(call({ subagent_type: 'perso', model: 'haiku', prompt: 'x' }));
+    const r = decide(call({ subagent_type: 'perso', prompt: 'x' }));
+    assert.match(r, /sonnet-reviewer ou opus-advisor/);
+    assert.match(r, /Ne t'arrete pas/);
+    denied(call({ subagent_type: 'general-purpose', model: 'sonnet', prompt: 'x' }));
+  } finally {
+    if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR; else process.env.CLAUDE_CONFIG_DIR = prev;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

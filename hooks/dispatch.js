@@ -20,7 +20,9 @@ const HOOKS = {
     { file: 'heavy-gate.js', matcher: 'Bash|PowerShell' },
     { file: 'process-gate.js', matcher: 'Bash|PowerShell' },
     { file: 'tool-guard.js' },
+    { file: 'ci-gate.js' },
   ],
+  PostToolUse: [{ file: 'ci-gate.js', matcher: 'Bash|PowerShell' }],
 };
 
 function parseJson(text) {

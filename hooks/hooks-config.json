@@ -34,6 +34,10 @@
     "rangeMaxLines": 400,
     "sizeCheckBytes": 20000
   },
+  "ciGate": {
+    "_note": "PostToolUse note la fin des git push et les gh pr checks ; PreToolUse refuse le passage d'une issue Linear en In Review sans gh pr checks vert demarre apres la fin du dernier push. Interrupteur : CI_GATE=off.",
+    "enabled": true
+  },
   "stateDir": "~/.claude/hook-state",
   "stateMaxAgeHours": 48,
   "processGate": {

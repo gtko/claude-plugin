@@ -14,5 +14,5 @@ PR : $ARGUMENTS — skill `livraison`, etapes 9 et 10. Reponses en francais.
    - suggestion contraire a la spec, a un ADR ou aux criteres : ne pas l'appliquer, repondre avec la justification et la reference ;
    - question ou suggestion optionnelle : repondre ; aucun retour sans reponse.
 3. Gate locale, re-review si le correctif touche du fond, base en retard : `git merge refs/remotes/origin/<base> --no-edit`, push.
-4. `gh pr checks <pr> --watch` : echec d'infra → `gh run rerun <id> --failed` sans toucher au code ; echec reel → corriger et reprendre en 3.
+4. Push termine, puis `gh pr checks <pr> --watch` dans un appel separe (jamais dans la meme commande ni le meme lot que le push) : echec d'infra → `gh run rerun <id> --failed` sans toucher au code ; echec reel → corriger et reprendre en 3.
 5. Recap sur la PR (retour → commit ou raison), relire PR et issue une derniere fois. Plus rien d'ouvert et CI verte : commentaire Linear « PR prete, en attente de merge », issue `In Review` si besoin. Jamais de merge.
